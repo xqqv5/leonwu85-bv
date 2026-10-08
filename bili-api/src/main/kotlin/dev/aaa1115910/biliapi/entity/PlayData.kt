@@ -433,8 +433,10 @@ data class PlayData(
     fun hasMuxedVideo(): Boolean =
         dashVideos.any { it.isMuxed }
 
+    // 接口可能只返回视频或音频轨道，两者都可独立播放。
     fun hasPlayableVodStreams(): Boolean =
-        dashVideos.isNotEmpty() && (hasMuxedVideo() || playableAudioCount() > 0)
+        dashVideos.any { it.baseUrl.isNotBlank() } ||
+            (dashAudios + listOfNotNull(dolby, flac)).any { it.baseUrl.isNotBlank() }
 
     operator fun plus(other: PlayData): PlayData {
         return PlayData(

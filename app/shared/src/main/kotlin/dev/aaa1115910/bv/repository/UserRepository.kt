@@ -38,120 +38,125 @@ class UserRepository(
         private val logger = KotlinLogging.logger { }
     }
 
+    private val initialAuthData = AuthData.fromPrefs()
     var isLogin by mutableStateOf(Prefs.isLogin)
-    var uid by mutableLongStateOf(Prefs.uid)
-    var uidCkMd5 by mutableStateOf(Prefs.uidCkMd5)
-    var sid by mutableStateOf(Prefs.sid)
-    var sessData by mutableStateOf(Prefs.sessData)
-    var biliJct by mutableStateOf(Prefs.biliJct)
-    var expiredDate by mutableStateOf(Prefs.tokenExpiredData)
+    var uid by mutableLongStateOf(initialAuthData.uid)
+    var uidCkMd5 by mutableStateOf(initialAuthData.uidCkMd5)
+    var sid by mutableStateOf(initialAuthData.sid)
+    var sessData by mutableStateOf(initialAuthData.sessData)
+    var biliJct by mutableStateOf(initialAuthData.biliJct)
+    var expiredDate by mutableStateOf(Date(initialAuthData.tokenExpiredData))
 
-    var accessToken by mutableStateOf(Prefs.accessToken)
-    var refreshToken by mutableStateOf(Prefs.refreshToken)
+    var accessToken by mutableStateOf(initialAuthData.accessToken)
+    var refreshToken by mutableStateOf(initialAuthData.refreshToken)
 
     var username by mutableStateOf("")
     var avatar by mutableStateOf("")
 
-    private val authFailureLogoutMutex = Mutex()
+    private val authMutationMutex = Mutex()
+    private val authFailureVerifier = AuthFailureVerifier()
 
     private fun reloadFromPrefs() {
         logger.info { "Reload auth data from prefs" }
 
-        uid = Prefs.uid
-        uidCkMd5 = Prefs.uidCkMd5
-        sid = Prefs.sid
-        sessData = Prefs.sessData
-        biliJct = Prefs.biliJct
+        val authData = AuthData.fromPrefs()
+        uid = authData.uid
+        uidCkMd5 = authData.uidCkMd5
+        sid = authData.sid
+        sessData = authData.sessData
+        biliJct = authData.biliJct
         isLogin = Prefs.isLogin
-        expiredDate = Prefs.tokenExpiredData
-        accessToken = Prefs.accessToken
-        refreshToken = Prefs.refreshToken
+        expiredDate = Date(authData.tokenExpiredData)
+        accessToken = authData.accessToken
+        refreshToken = authData.refreshToken
     }
 
-    private fun saveToPrefs(authData: AuthData) {
+    private fun saveToPrefs(authData: AuthData, isLogin: Boolean = true) {
         logger.info { "Save auth data to prefs" }
 
-        Prefs.uid = authData.uid
-        Prefs.uidCkMd5 = authData.uidCkMd5
-        Prefs.sid = authData.sid
-        Prefs.sessData = authData.sessData
-        Prefs.biliJct = authData.biliJct
-        Prefs.isLogin = true
-        Prefs.tokenExpiredData = Date(authData.tokenExpiredData)
-        Prefs.accessToken = authData.accessToken
-        Prefs.refreshToken = authData.refreshToken
-
-        updateAuthRepository()
-    }
-
-    private fun saveToPrefs() {
-        logger.info { "Save auth data to prefs" }
-
-        Prefs.uid = uid
-        Prefs.uidCkMd5 = uidCkMd5
-        Prefs.sid = sid
-        Prefs.sessData = sessData
-        Prefs.biliJct = biliJct
-        Prefs.isLogin = isLogin
-        Prefs.tokenExpiredData = expiredDate
-        Prefs.accessToken = accessToken
-        Prefs.refreshToken = refreshToken
-
+        Prefs.saveAuthData(authData, isLogin)
+        reloadFromPrefs()
         updateAuthRepository()
     }
 
     suspend fun logout() {
-        val user = db.userDao().findUserByUid(uid)
-        user?.let {
-            db.userDao().delete(it)
-            logger.info { "Delete user $uid in user db" }
-        } ?: let {
-            logger.info { "Not found user $uid in user db" }
-        }
-        clearAuth()
+        logoutCurrentUser()
     }
+
+    private fun isCurrentSession(authData: AuthData): Boolean =
+        isLogin && uid == authData.uid && sessData == authData.sessData
+
+    private suspend fun logoutCurrentUser(expectedAuth: AuthData? = null): Boolean =
+        authMutationMutex.withLock {
+            if (expectedAuth != null && !isCurrentSession(expectedAuth)) return@withLock false
+            val user = db.userDao().findUserByUid(uid)
+            user?.let {
+                db.userDao().delete(it)
+                logger.info { "Delete user $uid in user db" }
+            } ?: let {
+                logger.info { "Not found user $uid in user db" }
+            }
+            withContext(Dispatchers.Main.immediate) { clearAuth() }
+            true
+        }
 
     suspend fun logoutFromServer() {
-        val logoutUid = uid
+        val logoutAuth = AuthData.fromPrefs()
         BiliPassportHttpApi.logout(
-            biliCSRF = biliJct,
-            sessData = sessData,
-            dedeUserID = uid,
-            dedeUserIDCkMd5 = uidCkMd5,
-            sid = sid
+            biliCSRF = logoutAuth.biliJct,
+            sessData = logoutAuth.sessData,
+            dedeUserID = logoutAuth.uid,
+            dedeUserIDCkMd5 = logoutAuth.uidCkMd5,
+            sid = logoutAuth.sid
         ).requireSuccess()
-        if (uid == logoutUid) {
-            logout()
-        }
+        logoutCurrentUser(logoutAuth)
     }
 
-    suspend fun logoutOnAuthFailure(reason: String) {
-        authFailureLogoutMutex.withLock {
-            // 未登录状态或已完成登出时忽略，避免并发 -101 重复弹窗/清数据
-            if (!isLogin && !Prefs.isLogin) return
-            logger.info { "Auth failure detected, auto logout: $reason" }
-            withContext(Dispatchers.Main) {
-                BVApp.context.getString(R.string.exception_auth_failure)
-                    .toast(BVApp.context)
+    suspend fun logoutOnAuthFailure(reason: String, authData: AuthData) {
+        if (authData.uid <= 0L || authData.sessData.isBlank()) return
+        authFailureVerifier.verify(
+            authData = authData,
+            isCurrentSession = ::isCurrentSession,
+            validateSession = { credentials ->
+                BiliHttpApi.getWebInterfaceNav(
+                    buvid3 = Prefs.buvid3,
+                    sessData = credentials.sessData,
+                    dedeUserID = credentials.uid,
+                    dedeUserIDCkMd5 = credentials.uidCkMd5,
+                    biliJct = credentials.biliJct,
+                    sid = credentials.sid
+                ).isSessionAuthenticated(credentials.uid)
+            },
+            onInvalidSession = { credentials ->
+                if (logoutCurrentUser(credentials)) {
+                    logger.info { "Session invalidated after auth failure: $reason" }
+                    withContext(Dispatchers.Main) {
+                        BVApp.context.getString(R.string.exception_auth_failure)
+                            .toast(BVApp.context)
+                    }
+                }
+            },
+            onVerificationFailure = { error ->
+                logger.warn(error) { "Could not verify login session; keeping saved credentials" }
             }
-            logout()
-        }
+        )
     }
 
     private fun clearAuth() {
         logger.info { "Clear auth data in UserRepository" }
-        uid = 0
-        uidCkMd5 = ""
-        sid = ""
-        sessData = ""
-        biliJct = ""
-        isLogin = false
-        expiredDate = Date(0)
-        accessToken = ""
-        refreshToken = ""
+        saveToPrefs(
+            AuthData(
+                uid = 0L,
+                uidCkMd5 = "",
+                sid = "",
+                biliJct = "",
+                sessData = "",
+                tokenExpiredData = 0L
+            ),
+            isLogin = false
+        )
         username = ""
         avatar = ""
-        saveToPrefs()
     }
 
     private fun updateAuthRepository() {
@@ -165,8 +170,11 @@ class UserRepository(
     }
 
     suspend fun setUser(user: UserDB) {
-        saveToPrefs(AuthData.fromJson(user.auth))
-        reloadFromPrefs()
+        authMutationMutex.withLock {
+            withContext(Dispatchers.Main.immediate) {
+                saveToPrefs(AuthData.fromJson(user.auth))
+            }
+        }
         BVApp.instance?.initRepository()
         BVApp.instance?.initProxy()
         updateAvatar()
@@ -207,29 +215,30 @@ class UserRepository(
             "Validated account does not match the login result"
         }
 
-        val existUser = db.userDao().findUserByUid(authData.uid)
-        existUser?.let {
-            it.auth = authData.toJson()
-            identity?.username?.takeIf(String::isNotBlank)?.let { username ->
-                it.username = username
+        authMutationMutex.withLock {
+            val existUser = db.userDao().findUserByUid(authData.uid)
+            existUser?.let {
+                it.auth = authData.toJson()
+                identity?.username?.takeIf(String::isNotBlank)?.let { username ->
+                    it.username = username
+                }
+                identity?.avatar?.takeIf(String::isNotBlank)?.let { avatar ->
+                    it.avatar = avatar
+                }
+                db.userDao().update(it)
+            } ?: let {
+                val newUser = UserDB(
+                    uid = authData.uid,
+                    username = identity?.username?.takeIf(String::isNotBlank)
+                        ?: "User ${authData.uid}",
+                    avatar = identity?.avatar?.takeIf(String::isNotBlank)
+                        ?: "https://i0.hdslb.com/bfs/article/b6b843d84b84a3ba5526b09ebf538cd4b4c8c3f3.jpg",
+                    auth = authData.toJson()
+                )
+                db.userDao().insert(newUser)
             }
-            identity?.avatar?.takeIf(String::isNotBlank)?.let { avatar ->
-                it.avatar = avatar
-            }
-            db.userDao().update(it)
-        } ?: let {
-            val newUser = UserDB(
-                uid = authData.uid,
-                username = identity?.username?.takeIf(String::isNotBlank)
-                    ?: "User ${authData.uid}",
-                avatar = identity?.avatar?.takeIf(String::isNotBlank)
-                    ?: "https://i0.hdslb.com/bfs/article/b6b843d84b84a3ba5526b09ebf538cd4b4c8c3f3.jpg",
-                auth = authData.toJson()
-            )
-            db.userDao().insert(newUser)
+            withContext(Dispatchers.Main.immediate) { saveToPrefs(authData) }
         }
-        saveToPrefs(authData)
-        reloadFromPrefs()
         BVApp.instance?.initRepository()
         BVApp.instance?.initProxy()
         if (identity == null) {

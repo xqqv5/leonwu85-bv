@@ -1968,7 +1968,7 @@ class VideoPlayerV3ViewModel(
 
             logger.fInfo { "Video available resolution: $resolutionList" }
             availableQuality.swapListWithMainContext(resolutionList)
-            if (resolutionList.isEmpty()) {
+            if (resolutionList.isEmpty() && playData.dashVideos.isNotEmpty()) {
                 throw PlayDataUnavailableException("接口未返回可播放视频流")
             }
 
@@ -1995,9 +1995,6 @@ class VideoPlayerV3ViewModel(
             logger.fInfo { "Video available audio: $audioList" }
             availableAudio.swapListWithMainContext(audioList)
             val hasMuxedVideo = playData.hasMuxedVideo()
-            if (audioList.isEmpty() && !hasMuxedVideo) {
-                throw PlayDataUnavailableException("接口未返回可播放音频流")
-            }
 
             ensureVodPlaybackSessionActive(playbackSessionToken)
 
@@ -2036,9 +2033,9 @@ class VideoPlayerV3ViewModel(
             val selectedQuality = resolutionList.find { it == preferredQuality }
                 ?: resolutionList.sortedByDescending { it.code }
                     .firstOrNull { it.code < preferredQuality.code }
-                ?: resolutionList.last()
+                ?: resolutionList.lastOrNull()
             withContext(Dispatchers.Main) {
-                if (isVodPlaybackSessionActive(playbackSessionToken)) {
+                if (isVodPlaybackSessionActive(playbackSessionToken) && selectedQuality != null) {
                     currentQuality = selectedQuality
                 }
             }
@@ -2063,8 +2060,12 @@ class VideoPlayerV3ViewModel(
                         currentAudio = selectedAudio
                     }
                 }
-            } else {
+            } else if (hasMuxedVideo) {
                 logger.fInfo { "Use audio embedded in progressive video stream" }
+            } else if (playData.playableAudioCount() == 0) {
+                logger.fInfo { "Play video without an audio track" }
+            } else {
+                logger.fInfo { "Use audio track with an unrecognized quality" }
             }
 
             //再确认最终所选视频编码
@@ -2696,6 +2697,10 @@ class VideoPlayerV3ViewModel(
     }
 
     private suspend fun updateAvailableCodec(preferredCodec: VideoCodec? = null) {
+        if (playData!!.dashVideos.isEmpty()) {
+            availableVideoCodec.swapListWithMainContext(emptyList())
+            return
+        }
         if (settings.apiType == ApiType.App && playData!!.codec.isEmpty()) {
             // 纠正当前实际播放的编码
             val videoItem = playData!!.dashVideos
@@ -2793,9 +2798,8 @@ class VideoPlayerV3ViewModel(
             return
         }
 
-        val audioOnlyMode = mediaMode == PlaybackMediaMode.AudioOnly
-
-        val videoItem = playData!!.dashVideos.find {
+        val playableVideos = playData!!.dashVideos.filter { it.baseUrl.isNotBlank() }
+        val videoItem = playableVideos.find {
             when (settings.apiType) {
                 ApiType.Web -> it.quality == qn && codec.matchesCodecString(it.codecs)
                 ApiType.App -> {
@@ -2804,51 +2808,45 @@ class VideoPlayerV3ViewModel(
                 }
             }
         }
-        val selectedVideoItem = videoItem ?: playData!!.dashVideos.firstOrNull()
+        val selectedVideoItem = videoItem ?: playableVideos.firstOrNull()
         val muxedVideo = selectedVideoItem?.takeIf { it.isMuxed }
-        var videoUrl = if (audioOnlyMode) null else selectedVideoItem?.baseUrl
-        if (!audioOnlyMode && videoUrl == null) {
-            logger.fError { "Failed to get video URL" }
-            errorMessage = "获取视频地址失败"
+        val playableAudios = playData!!.dashAudios.filter { it.baseUrl.isNotBlank() }
+        val dolbyAudio = playData!!.dolby?.takeIf { it.baseUrl.isNotBlank() }
+        val flacAudio = playData!!.flac?.takeIf { it.baseUrl.isNotBlank() }
+        val audioItem = playableAudios.find { it.codecId == audio.code }
+            ?: dolbyAudio.takeIf { it?.codecId == audio.code }
+            ?: flacAudio.takeIf { it?.codecId == audio.code }
+            ?: playableAudios.minByOrNull { it.codecId }
+            ?: dolbyAudio
+            ?: flacAudio
+        val source = selectVodPlaybackSource(selectedVideoItem, audioItem, mediaMode) ?: run {
+            logger.fError { "Failed to get a playable video or audio URL" }
+            errorMessage = "获取播放地址失败"
             loadState = RequestState.Failed
             return
         }
-        val videoUrls = mutableListOf<String?>()
-        if (!audioOnlyMode) {
-            videoUrls.add(videoUrl)
-            videoUrls.addAll(selectedVideoItem?.backUrl ?: emptyList())
-        }
-
-        val audioItem = playData!!.dashAudios.find { it.codecId == audio.code }
-            ?: playData!!.dolby.takeIf { it?.codecId == audio.code }
-            ?: playData!!.flac.takeIf { it?.codecId == audio.code }
-            ?: playData!!.dashAudios.minByOrNull { it.codecId }
-        var audioUrl = audioItem?.baseUrl
-            ?: playData!!.dashAudios.firstOrNull()?.baseUrl
-            ?: muxedVideo?.baseUrl.takeIf { audioOnlyMode }
-        if (audioUrl == null && muxedVideo == null) {
-            logger.fError { "Failed to get audio URL" }
-            errorMessage = "获取音频地址失败"
-            loadState = RequestState.Failed
-            return
-        }
-        val audioUrls = mutableListOf<String?>()
-        if (audioUrl != null) {
-            audioUrls.add(audioUrl)
-            audioUrls.addAll(
-                audioItem?.backUrl
-                    ?: muxedVideo?.backUrl.takeIf { audioOnlyMode }
-                    ?: emptyList()
+        val effectiveMediaMode = source.mediaMode
+        val audioOnlyMode = effectiveMediaMode == PlaybackMediaMode.AudioOnly
+        if (mediaMode != effectiveMediaMode) {
+            addLogs(
+                if (audioOnlyMode) "接口未返回视频轨道，使用音频模式播放"
+                else "该视频没有音轨，使用正常模式播放"
             )
         }
+        val videoUrls = source.videoUrls
+        val audioUrls = source.audioUrls
+        var videoUrl = videoUrls.firstOrNull()
+        var audioUrl = audioUrls.firstOrNull()
 
         if (videoUrls.isNotEmpty()) {
             logger.fInfo { "all video hosts: ${videoUrls.filterNotNull().map { it.toMediaLocationLog() }}" }
         }
         if (audioUrls.isNotEmpty()) {
             logger.fInfo { "all audio hosts: ${audioUrls.filterNotNull().map { it.toMediaLocationLog() }}" }
-        } else {
+        } else if (muxedVideo != null) {
             logger.fInfo { "Use audio embedded in video stream" }
+        } else {
+            logger.fInfo { "Play video without an audio track" }
         }
 
         var videoCdnSelection: VodCdnSelection? = null
@@ -2877,10 +2875,15 @@ class VideoPlayerV3ViewModel(
             }
         }
 
+        val audioDescription = when {
+            muxedVideo != null -> "内嵌音频"
+            audioItem == null -> "无音轨"
+            else -> Audio.fromCode(audioItem.codecId)?.getDisplayName(BVApp.context) ?: "未知"
+        }
         addLogs(
             "播放模式：${if (audioOnlyMode) "音频模式" else "正常模式"}，播放清晰度：${availableQuality.firstOrNull { it.code == qn }}, " +
                     "视频编码：${codec.getDisplayName(BVApp.context)}, " +
-                    "音频编码：${if (muxedVideo != null) "内嵌音频" else (Audio.fromCode(audioItem?.codecId ?: 0))?.getDisplayName(BVApp.context) ?: "未知"}"
+                    "音频编码：$audioDescription"
         )
         if (videoUrl != null) {
             addLogs("video host: ${videoUrl.toMediaLocationLog()}")
@@ -2890,8 +2893,10 @@ class VideoPlayerV3ViewModel(
         }
         if (audioUrl != null) {
             addLogs("audio host: ${audioUrl.toMediaLocationLog()}")
-        } else {
+        } else if (muxedVideo != null) {
             addLogs("audio host: embedded in video")
+        } else {
+            addLogs("audio host: no audio track")
         }
         audioCdnSelection?.let { addLogs("audio cdn: ${it.reason}") }
 
@@ -2901,8 +2906,8 @@ class VideoPlayerV3ViewModel(
 
         // 需要完整 DASH 描述的内核（VLC 4）：用最终选定的地址组装，接口没给 sidx 范围就探测一次文件头
         val dashStreamInfo = if (
-            !audioOnlyMode && muxedVideo == null && selectedVideoItem != null && audioItem != null &&
-            videoUrl != null && audioUrl != null && videoPlayer?.prefersDashManifest == true
+            !audioOnlyMode && muxedVideo == null && selectedVideoItem != null &&
+            videoUrl != null && videoPlayer?.prefersDashManifest == true
         ) {
             resolveDashStreamInfo(
                 video = selectedVideoItem,
@@ -2917,6 +2922,7 @@ class VideoPlayerV3ViewModel(
 
         withContext(Dispatchers.Main) {
             if (!isVodPlaybackSessionActive(playbackSessionToken)) return@withContext
+            currentPlaybackMediaMode = effectiveMediaMode
             currentVideoHeight = selectedVideoItem?.height ?: 0
             currentVideoWidth = selectedVideoItem?.width ?: 0
             val historyPositionMs = lastPlayed
@@ -2963,14 +2969,14 @@ class VideoPlayerV3ViewModel(
     }
 
     /**
-     * 把选定的视频/音频表示整理成 [DashStreamInfo]：读取两个文件的 `sidx`（Web/代理接口给了范围就只取那几百字节，
-     * gRPC 接口没给就先扫 16 KiB 文件头）并解析成精确的分段表。任一失败返回 null，播放器回退到双地址方式。
+     * 把选定的视频与可选音频表示整理成 [DashStreamInfo]：读取文件的 `sidx`（Web/代理接口给了范围就只取那几百字节，
+     * gRPC 接口没给就先扫 16 KiB 文件头）并解析成精确的分段表。任一失败返回 null，播放器回退到直接地址播放。
      */
     private suspend fun resolveDashStreamInfo(
         video: DashVideo,
         videoUrl: String,
-        audio: DashAudio,
-        audioUrl: String,
+        audio: DashAudio?,
+        audioUrl: String?,
         durationMs: Long,
     ): DashStreamInfo? {
         // 与播放器内核同一套请求头规则：APP 签名地址不能带网页 Referer，否则 CDN 返回 403
@@ -2985,15 +2991,19 @@ class VideoPlayerV3ViewModel(
         }
 
         val videoIndex = DashIndexProbe.fetchSegmentIndex(videoUrl, referer, userAgent, video.initRange, video.indexRange)
-        val audioIndex = DashIndexProbe.fetchSegmentIndex(audioUrl, referer, userAgent, audio.initRange, audio.indexRange)
-        if (videoIndex == null || audioIndex == null) {
+        val audioIndex = if (audio != null && audioUrl != null) {
+            DashIndexProbe.fetchSegmentIndex(audioUrl, referer, userAgent, audio.initRange, audio.indexRange)
+        } else {
+            null
+        }
+        if (videoIndex == null || (audio != null && audioIndex == null)) {
             logger.fInfo { "DASH manifest unavailable: sidx unreadable (video=${videoIndex != null}, audio=${audioIndex != null})" }
-            addLogs("未能读取 DASH 索引，VLC 4 回退到双地址播放")
+            addLogs("未能读取 DASH 索引，VLC 4 回退到直接地址播放")
             return null
         }
         addLogs(
-            "DASH 索引：video ${videoIndex.segmentIndex.segments.size} 段@${videoIndex.indexRange}, " +
-                "audio ${audioIndex.segmentIndex.segments.size} 段@${audioIndex.indexRange}"
+            "DASH 索引：video ${videoIndex.segmentIndex.segments.size} 段@${videoIndex.indexRange}" +
+                (audioIndex?.let { ", audio ${it.segmentIndex.segments.size} 段@${it.indexRange}" } ?: "，无音轨")
         )
 
         return DashStreamInfo(
@@ -3009,7 +3019,7 @@ class VideoPlayerV3ViewModel(
                 indexRange = videoIndex.indexRange,
                 segmentIndex = videoIndex.segmentIndex,
             ),
-            audio = DashRepresentation(
+            audio = if (audio != null && audioUrl != null && audioIndex != null) DashRepresentation(
                 url = audioUrl,
                 mimeType = audio.mimeType?.takeIf { it.isNotBlank() } ?: "audio/mp4",
                 codecs = audio.codecs,
@@ -3017,7 +3027,7 @@ class VideoPlayerV3ViewModel(
                 initRange = audioIndex.initRange,
                 indexRange = audioIndex.indexRange,
                 segmentIndex = audioIndex.segmentIndex,
-            ),
+            ) else null,
         )
     }
 

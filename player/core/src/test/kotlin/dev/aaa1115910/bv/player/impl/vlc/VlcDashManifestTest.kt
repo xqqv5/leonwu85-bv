@@ -51,10 +51,10 @@ class VlcDashManifestTest {
     private val info = DashStreamInfo(durationMs = 246_713, video = video, audio = audio)
 
     @Test
-    fun applicabilityRequiresAudioSegmentIndexesAndDuration() {
+    fun applicabilityRequiresIndexesForPresentTracksAndDuration() {
         assertTrue(VlcDashManifest.isApplicable(info))
         assertFalse(VlcDashManifest.isApplicable(null))
-        assertFalse(VlcDashManifest.isApplicable(info.copy(audio = null)))
+        assertTrue(VlcDashManifest.isApplicable(info.copy(audio = null)))
         assertFalse(VlcDashManifest.isApplicable(info.copy(durationMs = 0)))
         assertFalse(VlcDashManifest.isApplicable(info.copy(audio = audio.copy(segmentIndex = null))))
         assertFalse(
@@ -62,6 +62,23 @@ class VlcDashManifestTest {
                 info.copy(video = video.copy(segmentIndex = DashSegmentIndex(16000, emptyList())))
             )
         )
+    }
+
+    @Test
+    fun producesVideoOnlyMpdWithSeekableSegments() {
+        val videoOnly = info.copy(audio = null)
+        assertTrue(VlcDashManifest.isApplicable(videoOnly))
+        val doc = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
+            .newDocumentBuilder()
+            .parse(VlcDashManifest.build(videoOnly).byteInputStream())
+
+        val sets = doc.getElementsByTagNameNS("*", "AdaptationSet")
+        assertEquals(1, sets.length)
+        assertEquals("video/mp4", sets.item(0).attributes.getNamedItem("mimeType").nodeValue)
+        assertEquals(video.url, doc.getElementsByTagNameNS("*", "BaseURL").item(0).textContent)
+        assertEquals(1, doc.getElementsByTagNameNS("*", "SegmentList").length)
+        assertEquals(videoIndex.segments.size, doc.getElementsByTagNameNS("*", "SegmentURL").length)
+        assertEquals("PT246.713S", doc.documentElement.getAttribute("mediaPresentationDuration"))
     }
 
     @Test

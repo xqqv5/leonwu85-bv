@@ -763,10 +763,10 @@ class VlcMediaPlayer(
     private fun buildMedia(url: String, audioUrl: String?): Media {
         val normalizedAudioUrl = audioUrl?.takeIf { it.isNotBlank() && it != url }
         val manifest = dashStreamInfo?.takeIf { info ->
-            !LibVLC.isVlc3() && normalizedAudioUrl != null && VlcDashManifest.isApplicable(info)
+            !LibVLC.isVlc3() && VlcDashManifest.isApplicable(info)
         }
         val media = if (manifest != null) {
-            // VLC 4：把音视频两个 fMP4 交给 adaptive 解复用器当一个 DASH 输入播，避免 input slave 的 PCR 互相打架
+            // VLC 4：把视频与可选音频交给 adaptive 解复用器，统一按分段索引播放
             val mpd = VlcDashManifest.write(appContext.cacheDir.resolve("vlc"), manifest)
             logger.info { "Playing through DASH manifest $mpd (VLC ${runCatching { LibVLC.version() }.getOrDefault("?")})" }
             Media(libVlc, Uri.fromFile(mpd))

@@ -6,7 +6,7 @@ import java.io.File
 import java.util.Locale
 
 /**
- * Builds a minimal static DASH MPD for one video + one audio representation.
+ * Builds a minimal static DASH MPD for one video and an optional audio representation.
  *
  * Why: VLC 4 (libvlcjni master) raises the input clock's discontinuity threshold to 300 ms and
  * lets every input source feed PCR, so playing the audio track as an input slave (`addSlave`)
@@ -28,7 +28,7 @@ object VlcDashManifest {
 
     /** Whether [info] carries everything the manifest path needs. */
     fun isApplicable(info: DashStreamInfo?): Boolean {
-        return info != null && info.audio != null && info.hasSegmentIndexes && info.durationMs > 0L
+        return info != null && info.hasSegmentIndexes && info.durationMs > 0L
     }
 
     /** MPD document for [info]; caller must have checked [isApplicable]. */

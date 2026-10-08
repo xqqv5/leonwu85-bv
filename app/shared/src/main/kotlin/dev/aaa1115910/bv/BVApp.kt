@@ -117,9 +117,10 @@ class BVApp : Application() {
         BiliHttpApi.buvid3Provider = { Prefs.buvid3 }
         BiliAuthFailureHandler.onAuthFailure = { message ->
             if (Prefs.isLogin) {
+                val authData = AuthData.fromPrefs()
                 authFailureScope.launch {
                     val userRepository by koinApplication.koin.inject<UserRepository>()
-                    userRepository.logoutOnAuthFailure(message)
+                    userRepository.logoutOnAuthFailure(message, authData)
                 }
             }
         }

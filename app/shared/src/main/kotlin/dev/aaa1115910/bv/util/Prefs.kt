@@ -16,6 +16,7 @@ import de.schnettler.datastore.manager.PreferenceRequest
 import dev.aaa1115910.biliapi.entity.ApiType
 import dev.aaa1115910.biliapi.http.util.generateBuvid
 import dev.aaa1115910.bv.BVApp
+import dev.aaa1115910.bv.entity.AuthData
 import dev.aaa1115910.bv.entity.CdnService
 import dev.aaa1115910.bv.entity.LiveQualityPreference
 import dev.aaa1115910.bv.entity.PlayerType
@@ -187,6 +188,12 @@ object Prefs {
         return playerBottomControlPanelConfigJson.encodeToString(
             StoredPlayerBottomControlPanelConfig.fromConfig(config)
         )
+    }
+
+    fun readAuthData(): AuthData = runBlocking { dsm.readAuthData() }
+
+    fun saveAuthData(authData: AuthData, isLogin: Boolean = true) = runBlocking {
+        dsm.saveAuthData(authData, isLogin)
     }
 
     var isLogin: Boolean

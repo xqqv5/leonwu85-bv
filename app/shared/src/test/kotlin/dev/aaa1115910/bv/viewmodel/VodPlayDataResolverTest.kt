@@ -15,6 +15,41 @@ import kotlin.test.assertTrue
 
 class VodPlayDataResolverTest {
     @Test
+    fun `single track response from either api is accepted without fallback`() = runBlocking {
+        val videoOnly = playableData().copy(dashAudios = emptyList())
+        val audioOnly = playableData().copy(dashVideos = emptyList())
+        for (api in ApiType.entries) {
+            for (expected in listOf(videoOnly, audioOnly)) {
+                val attempts = mutableListOf<ApiType>()
+                val actual = resolvePlayableVodPlayData(preferredApi = api, fetch = {
+                    attempts += it
+                    expected
+                })
+
+                assertSame(expected, actual)
+                assertEquals(listOf(api), attempts)
+            }
+        }
+    }
+
+    @Test
+    fun `fallback accepts either a video only or audio only response`() = runBlocking {
+        for (expected in listOf(
+            playableData().copy(dashAudios = emptyList()),
+            playableData().copy(dashVideos = emptyList()),
+        )) {
+            val attempts = mutableListOf<ApiType>()
+            val actual = resolvePlayableVodPlayData(preferredApi = ApiType.App, fetch = { api ->
+                attempts += api
+                if (api == ApiType.App) emptyData() else expected
+            })
+
+            assertSame(expected, actual)
+            assertEquals(listOf(ApiType.App, ApiType.Web), attempts)
+        }
+    }
+
+    @Test
     fun `app failure falls back to web`() = runBlocking {
         val expected = playableData()
         val attempts = mutableListOf<ApiType>()
