@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.tv.screens.user
 
+import dev.aaa1115910.bv.util.toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -278,6 +279,7 @@ fun FavoriteScreen(
                                     data = video,
                                     onClick = {
                                         if (favoriteViewModel.selectionMode) favoriteViewModel.toggleSelected(video.avid)
+                                        else if (video.isInvalid) "该视频已失效，请清理收藏夹".toast(context)
                                         else if (!favoriteViewModel.operating) VideoInfoActivity.actionStart(context, video.avid)
                                     },
                                     onLongClick = {

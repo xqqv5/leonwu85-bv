@@ -30,6 +30,8 @@ import dev.aaa1115910.bv.player.entity.VideoListPart
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisode
 import dev.aaa1115910.bv.player.entity.VideoListUgcEpisodeTitle
 import dev.aaa1115910.bv.offline.OfflineVideoCacheEntry
+import dev.aaa1115910.bv.repository.LocalUserBlockRepository
+import dev.aaa1115910.bv.repository.observeList
 import dev.aaa1115910.bv.repository.VideoInfoRepository
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
@@ -59,7 +61,8 @@ class VideoDetailViewModel(
     private val favoriteRepository: FavoriteRepository,
     private val tripleLikeRepository: TripleLikeRepository,
     private val toViewRepository: ToViewRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val localUserBlocks: LocalUserBlockRepository
 ) : ViewModel() {
     companion object {
         val DETAIL_API_TYPE: ApiType
@@ -71,6 +74,8 @@ class VideoDetailViewModel(
     var videoDetail: VideoDetail? by mutableStateOf(null)
 
     var relatedVideos = mutableStateListOf<VideoCardData>()
+    init { localUserBlocks.observeList(viewModelScope, relatedVideos) { it.upId } }
+
     var favoriteFolders = mutableStateListOf<FavoriteFolderMetadata>()
     var favoriteFolderIds = mutableStateListOf<Long>()
     var upOwnerStats: UpOwnerStats? by mutableStateOf(null)
@@ -181,7 +186,14 @@ class VideoDetailViewModel(
             upRelationLoading = false
             relatedVideos.clear()
             videoInfoRepository.videoList.clear()
-            videoInfoRepository.videoList.addAll(offlineDetail.toVideoListForTargetCid(entry.cid))
+            videoInfoRepository.videoList.addAll(entries.filter { it.groupKey == entry.groupKey }.mapIndexed { index, cached ->
+                VideoListUgcEpisode(
+                    aid = cached.aid, cid = cached.cid, title = cached.title,
+                    partTitle = cached.displayTitle, index = index, cover = cached.cover,
+                    duration = (cached.durationMs / 1000L).toInt(), viewCount = 0,
+                    danmakuCount = cached.danmakuCount
+                )
+            })
         }
     }
 
@@ -190,7 +202,10 @@ class VideoDetailViewModel(
         val relateVideoCardDataList = withContext(Dispatchers.Main.immediate) {
             videoDetail?.toRelatedVideoCardDataList() ?: emptyList()
         }
-        relatedVideos.swapListWithMainContext(relateVideoCardDataList)
+        withContext(Dispatchers.Main.immediate) {
+            relatedVideos.clear()
+            relatedVideos.addAll(relateVideoCardDataList.filterNot { localUserBlocks.isBlocked(it.upId) })
+        }
         logger.fInfo { "Update ${relateVideoCardDataList.size} relate videos" }
     }
 

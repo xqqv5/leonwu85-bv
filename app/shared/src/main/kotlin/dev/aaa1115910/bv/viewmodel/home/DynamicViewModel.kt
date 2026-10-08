@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.aaa1115910.bv.repository.LocalUserBlockRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.aaa1115910.biliapi.entity.user.DynamicEmotePackageDraft
@@ -39,6 +40,7 @@ import dev.aaa1115910.bv.repository.UserRepository as BvUserRepository
 
 @KoinViewModel
 class DynamicViewModel(
+    private val localUserBlocks: LocalUserBlockRepository,
     private val bvUserRepository: BvUserRepository,
     private val userRepository: UserRepository,
     private val likeRepository: LikeRepository
@@ -57,7 +59,7 @@ class DynamicViewModel(
 
     // 全部动态
     val dynamicAllList = mutableStateListOf<DynamicItem>()
-    private val tempBlockedMids = mutableStateListOf<Long>()
+
     private var currentAllPage = 0
     var loadingAll by mutableStateOf(false)
     var allHasMore by mutableStateOf(true)
@@ -121,7 +123,15 @@ class DynamicViewModel(
         )
 
     init {
-        println("=====init DynamicViewModel")
+        viewModelScope.launch {
+            localUserBlocks.blocked.collect { ids ->
+                dynamicAllList.removeAll { it.author.mid in ids }
+                dynamicVideoList.removeAll { it.authorId in ids }
+                dynamicPgcList.removeAll { it.author.mid in ids }
+                dynamicArticleList.removeAll { it.author.mid in ids }
+                dynamicUpList.removeAll { it.author.mid in ids }
+            }
+        }
     }
 
     suspend fun loadMoreVideo() {
@@ -134,13 +144,9 @@ class DynamicViewModel(
 
     fun tempBlockAuthor(mid: Long) {
         if (mid <= 0L) return
-        viewModelScope.launch(Dispatchers.Main.immediate) {
-            if (!tempBlockedMids.contains(mid)) tempBlockedMids.add(mid)
-            dynamicAllList.removeAll { it.author.mid == mid }
-            dynamicVideoList.removeAll { it.authorId == mid }
-            dynamicPgcList.removeAll { it.author.mid == mid }
-            dynamicArticleList.removeAll { it.author.mid == mid }
-            dynamicUpList.removeAll { it.author.mid == mid }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { localUserBlocks.add(mid) }
+            (result.exceptionOrNull()?.localizedMessage ?: "已本地屏蔽，可在设置中解除").toast(BVApp.context)
         }
     }
 
@@ -374,7 +380,7 @@ class DynamicViewModel(
                 } else {
                     currentVideoPage = request.page
                     dynamicVideoList.addAll(
-                        dynamicVideoData.videos.filter { it.authorId !in tempBlockedMids }
+                        dynamicVideoData.videos.filter { !localUserBlocks.isBlocked(it.authorId) }
                     )
                     videoHistoryOffset = dynamicVideoData.historyOffset
                     videoUpdateBaseline = dynamicVideoData.updateBaseline
@@ -436,7 +442,7 @@ class DynamicViewModel(
                 } else {
                     currentAllPage = request.page
                     dynamicAllList.addAll(
-                        dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids }
+                        dynamicData.dynamics.filter { !localUserBlocks.isBlocked(it.author.mid) }
                     )
                     allHistoryOffset = dynamicData.historyOffset
                     allUpdateBaseline = dynamicData.updateBaseline
@@ -647,7 +653,7 @@ class DynamicViewModel(
                 } else {
                     currentPgcPage = request.page
                     dynamicPgcList.addAll(
-                        dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids }
+                        dynamicData.dynamics.filter { !localUserBlocks.isBlocked(it.author.mid) }
                     )
                     pgcHistoryOffset = dynamicData.historyOffset
                     pgcUpdateBaseline = dynamicData.updateBaseline
@@ -716,7 +722,7 @@ class DynamicViewModel(
                     false
                 } else {
                     dynamicArticleList.addAll(
-                        dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids }
+                        dynamicData.dynamics.filter { !localUserBlocks.isBlocked(it.author.mid) }
                     )
                     currentArticlePage = request.page
                     articleHistoryOffset = dynamicData.historyOffset
@@ -852,7 +858,7 @@ class DynamicViewModel(
                 } else {
                     currentUpPage = request.page
                     dynamicUpList.addAll(
-                        dynamicData.dynamics.filter { it.author.mid !in tempBlockedMids }
+                        dynamicData.dynamics.filter { !localUserBlocks.isBlocked(it.author.mid) }
                     )
                     upHistoryOffset = dynamicData.historyOffset
                     upUpdateBaseline = dynamicData.updateBaseline

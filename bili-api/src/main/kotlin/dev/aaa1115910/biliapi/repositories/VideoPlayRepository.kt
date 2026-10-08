@@ -246,7 +246,8 @@ class VideoPlayRepository(
         bvid: String,
         cid: Long,
         qn: Int,
-        tryLook1080P: Boolean = false
+        tryLook1080P: Boolean = false,
+        epid: Int? = null
     ): PlayData {
         val tryLook = shouldTryLook1080P(tryLook1080P, authRepository.sessionData)
         val qnCandidates = downloadQnCandidates(qn)
@@ -254,7 +255,12 @@ class VideoPlayRepository(
 
         qnCandidates.forEach { candidateQn ->
             val result = runCatching {
-                val playUrlData = BiliHttpApi.getVideoWbiPlayUrl(
+                val playUrlData = if (epid != null) {
+                    BiliHttpApi.getPgcVideoPlayUrlV2(
+                        av = aid, cid = cid, epid = epid, fnval = 4048, qn = candidateQn,
+                        fnver = 0, fourk = 1, sessData = authRepository.sessionData, tryLook = tryLook
+                    ).getResponseData().videoInfo
+                } else BiliHttpApi.getVideoWbiPlayUrl(
                     av = aid,
                     bv = bvid.takeIf { it.isNotBlank() },
                     cid = cid,

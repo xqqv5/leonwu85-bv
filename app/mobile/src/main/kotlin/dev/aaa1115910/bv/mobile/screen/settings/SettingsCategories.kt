@@ -71,6 +71,7 @@ fun SettingsCategories(
                         MobileSettings.AudioVideo,
                         MobileSettings.Play,
                         MobileSettings.SponsorBlock,
+                        MobileSettings.LocalUserBlock,
                         MobileSettings.Advance,
                         MobileSettings.Debug
                     ).let { items ->

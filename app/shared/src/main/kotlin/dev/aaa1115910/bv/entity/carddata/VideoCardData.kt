@@ -40,7 +40,8 @@ data class VideoCardData(
     val feedGoto: String = "",
     val feedParam: String = "",
     val dislikeReasons: List<VideoCardFeedOption> = emptyList(),
-    val feedbacks: List<VideoCardFeedOption> = emptyList()
+    val feedbacks: List<VideoCardFeedOption> = emptyList(),
+    val isInvalid: Boolean = false
 ) {
     val resolvedBvid: String
         get() = bvid.ifBlank {
@@ -49,6 +50,7 @@ data class VideoCardData(
 
     val coverBadges: List<String>
         get() = listOfNotNull(
+            "已失效".takeIf { isInvalid },
             "互动视频".takeIf { isInteractive },
             when {
                 isChargingArc && badgeText.isNotBlank() -> badgeText

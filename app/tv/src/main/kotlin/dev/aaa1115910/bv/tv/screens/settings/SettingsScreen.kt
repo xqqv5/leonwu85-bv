@@ -71,6 +71,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.entity.PlayerType
+import dev.aaa1115910.bv.tv.screens.settings.content.LocalUserBlockSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.AboutSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.ApiSetting
 import dev.aaa1115910.bv.tv.screens.settings.content.DanmakuFilterSetting
@@ -249,6 +250,7 @@ enum class SettingsMenuNavItem(
     Live(R.string.settings_item_live, Icons.Rounded.LiveTv),
     DanmakuFilter(R.string.settings_item_danmaku_filter, Icons.Rounded.FilterAlt),
     SponsorBlock(R.string.settings_item_sponsor_block, Icons.Rounded.Block),
+    LocalUserBlock(R.string.settings_item_local_user_block, Icons.Rounded.Block),
     Api(R.string.settings_item_api, Icons.Rounded.Code),
     Other(R.string.settings_item_other, Icons.Rounded.MoreHoriz),
     Storage(R.string.settings_item_storage, Icons.Rounded.Storage),
@@ -301,6 +303,7 @@ fun SettingContent(
                     SettingsMenuNavItem.Network -> NetworkSetting()
                     SettingsMenuNavItem.UI -> UISetting()
                     SettingsMenuNavItem.Storage -> StorageSetting()
+                    SettingsMenuNavItem.LocalUserBlock -> LocalUserBlockSetting()
                     SettingsMenuNavItem.Api -> ApiSetting()
                     SettingsMenuNavItem.Live -> LiveStreamingSetting()
                     SettingsMenuNavItem.DanmakuFilter -> DanmakuFilterSetting()

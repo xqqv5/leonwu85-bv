@@ -2906,32 +2906,24 @@ object BiliHttpApi {
     /**
      * 获取搜索关键词建议
      *
-     * 如果请求不带 [mainVer]，那返回的响应将只会包含 result，但不便于数据处理
-     *
-     * 如果请求中包含了 [highlight]，在返回的结果中 [KeywordSuggest.Result.tag] 的 name 会包含高亮的 html 标签
+     * 使用 Web 联想接口，由统一拦截器添加 WBI 签名。
      */
     @OptIn(InternalAPI::class)
     suspend fun getKeywordSuggest(
         term: String,
-        mainVer: String = "v1",
         highlight: String? = null,
-        buvid: String
+        buvid: String = ""
     ): KeywordSuggest {
-        // 需手动解析 json，因为返回的 Content-Type 为 null，会导致 Ktor 抛出异常
-        // io.ktor.client.call.NoTransformationFoundException: Expected response body of the type 'class dev.aaa1115910.biliapi.http.entity.search.KeywordSuggest (Kotlin reflection is not available)' but was 'class io.ktor.utils.io.ByteBufferChannel (Kotlin reflection is not available)'
-        // In response from `https://s.search.bilibili.com/main/suggest?term=xxx`
-        // Response status `200 `
-        // Response header `ContentType: null`
-        // Request header `Accept: application/json`
-        val responseText = client.get("https://s.search.bilibili.com/main/suggest") {
+        // 明确按 JSON 解析，兼容服务端缺少 Content-Type 的响应。
+        val responseText = client.get("/x/web-interface/suggest") {
             parameter("term", term)
-            parameter("main_ver", mainVer)
-            highlight?.let { parameter("highlight", it) }
-            parameter("buvid", buvid)
+            parameter("highlight", highlight ?: "0")
+            parameter("spmid", "333.1365")
+            parameter("web_location", "333.1365")
+            buvid.takeIf { it.isNotBlank() }?.let { parameter("buvid", it) }
         }.readRawBytes().toString(Charsets.UTF_8)
         val keywordSuggest = json.decodeFromString<KeywordSuggest>(responseText)
-        val result = json.decodeFromJsonElement<KeywordSuggest.Result>(keywordSuggest.result!!)
-        keywordSuggest.suggests.addAll(result.tag)
+        BiliResponseWithoutData(keywordSuggest.code, keywordSuggest.message).requireSuccess()
         return keywordSuggest
     }
 

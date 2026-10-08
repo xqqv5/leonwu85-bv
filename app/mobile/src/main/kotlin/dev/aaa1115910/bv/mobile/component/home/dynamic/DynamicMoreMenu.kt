@@ -48,6 +48,7 @@ import dev.aaa1115910.biliapi.repositories.UserRepository
 import dev.aaa1115910.bv.mobile.activities.UserSpaceActivity
 import dev.aaa1115910.bv.mobile.component.videocard.shareText
 import dev.aaa1115910.bv.mobile.util.saveImageToGallery
+import dev.aaa1115910.bv.component.RepostPublishDialog
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.toast
 import kotlinx.coroutines.Dispatchers
@@ -92,6 +93,7 @@ fun DynamicMoreMenu(
     val authorName = dynamicItem.author.author.ifBlank { "UP主" }
     var showSheet by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
+    var showRepostDialog by remember { mutableStateOf(false) }
 
     fun requireLogin(): Boolean {
         if (!Prefs.isLogin) {
@@ -186,6 +188,14 @@ fun DynamicMoreMenu(
                     }
                 )
                 DynamicSheetItem(
+                    icon = Icons.AutoMirrored.Rounded.ForwardToInbox,
+                    text = "转发并评论",
+                    onClick = {
+                        showSheet = false
+                        if (requireLogin() && !dynamicItem.id.isNullOrBlank()) showRepostDialog = true
+                    }
+                )
+                DynamicSheetItem(
                     icon = Icons.Rounded.Share,
                     text = "分享动态",
                     onClick = {
@@ -204,7 +214,7 @@ fun DynamicMoreMenu(
                 if (onTempBlockAuthor != null) {
                     DynamicSheetItem(
                         icon = Icons.Rounded.VisibilityOff,
-                        text = "临时屏蔽：${dynamicItem.author.author}",
+                        text = "本地屏蔽：${dynamicItem.author.author}",
                         onClick = {
                             showSheet = false
                             onTempBlockAuthor(dynamicItem.author)
@@ -227,6 +237,13 @@ fun DynamicMoreMenu(
                 )
             }
         }
+    }
+
+    if (showRepostDialog) {
+        RepostPublishDialog(item = dynamicItem, onDismiss = { showRepostDialog = false }, onSuccess = {
+            showRepostDialog = false
+            "发布成功".toast(context)
+        })
     }
 
     if (showReportDialog) {

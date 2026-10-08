@@ -86,6 +86,10 @@ abstract class AbstractVideoPlayer {
     /** 是否正在播放 */
     abstract val isPlaying: Boolean
 
+    /** 当前有播放请求且内核正在等待媒体数据。暂停时不应报告缓冲状态。 */
+    open val isBuffering: Boolean
+        get() = false
+
     /** 媒体是否可 seek */
     abstract val isSeekable: Boolean
 

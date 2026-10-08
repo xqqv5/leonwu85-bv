@@ -38,6 +38,7 @@ class FavoriteRepository(
         addMediaIds: List<Long>,
         preferApiType: ApiType = ApiType.Web
     ) {
+        validateVideoAdditions(aid, addMediaIds, preferApiType)
         when (preferApiType) {
             ApiType.Web -> BiliHttpApi.setVideoToFavorite(
                 avid = aid,
@@ -85,6 +86,7 @@ class FavoriteRepository(
         delMediaIds: List<Long>,
         preferApiType: ApiType = ApiType.Web
     ) {
+        validateVideoAdditions(aid, addMediaIds, preferApiType)
         when (preferApiType) {
             ApiType.Web -> BiliHttpApi.setVideoToFavorite(
                 avid = aid,
@@ -239,6 +241,18 @@ class FavoriteRepository(
     }
 
     suspend fun transferResources(request: FavoriteTransferRequest, mode: FavoriteTransferMode) {
+        val target = FavoriteFolderMetadata.fromHttpFavoriteFolderInfo(getFavoriteFolderInfo(request.targetId))
+        if (request.resourcesInDisplayOrder.size > target.remainingCapacity) {
+            val ids = BiliHttpApi.getFavoriteIdList(
+                mediaId = request.targetId, sessData = authRepository.sessionData
+            )
+            dev.aaa1115910.biliapi.http.entity.BiliResponseWithoutData(ids.code, ids.message).requireSuccess()
+            val existing = ids.data.orEmpty().map { it.id to FavoriteItemType.fromValue(it.type) }.toSet()
+            val additions = request.resourcesInDisplayOrder.distinct().count { it !in existing }
+            require(additions <= target.remainingCapacity) {
+                "目标收藏夹仅剩 ${target.remainingCapacity} 个位置，需新增 $additions 项"
+            }
+        }
         BiliHttpApi.transferFavoriteResources(
             request = request, mode = mode, mid = authRepository.mid ?: error("账号未登录"),
             csrf = authRepository.biliJct ?: error("账号未登录"),
@@ -252,5 +266,16 @@ class FavoriteRepository(
             csrf = authRepository.biliJct ?: error("账号未登录"),
             sessData = authRepository.sessionData ?: error("账号未登录")
         ).requireSuccess()
+    }
+
+    private suspend fun validateVideoAdditions(aid: Long, ids: List<Long>, api: ApiType) {
+        if (ids.isEmpty()) return
+        val folders = getAllFavoriteFolderMetadataList(
+            mid = authRepository.mid ?: error("账号未登录"), rid = aid, preferApiType = api
+        ).associateBy { it.id }
+        ids.forEach { id ->
+            val folder = folders[id] ?: error("收藏夹不存在，请刷新后重试")
+            require(folder.canSelect) { "${folder.title}已满（${folder.mediaCount}/${folder.capacity}）" }
+        }
     }
 }

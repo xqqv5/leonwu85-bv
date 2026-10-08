@@ -1114,6 +1114,17 @@ private fun UserSpaceMoreMenu(
                     openUrl(context, userSpaceSearchUrl(viewModel.upMid))
                 }
             )
+            if (!isSelf) {
+                DropdownMenuItem(
+                    text = { Text(if (viewModel.isLocallyBlocked) "解除本地屏蔽" else "本地屏蔽 UP 主") },
+                    onClick = {
+                        expanded = false
+                        viewModel.toggleLocalBlock { blocked, success ->
+                            (if (!success) "保存失败，请重试" else if (blocked) "已本地屏蔽" else "已解除本地屏蔽").toast(context)
+                        }
+                    }
+                )
+            }
             if (Prefs.isLogin && !isSelf) {
                 DropdownMenuItem(
                     text = { Text(text = if (viewModel.isBlacklisted) "移出黑名单" else "加入黑名单") },

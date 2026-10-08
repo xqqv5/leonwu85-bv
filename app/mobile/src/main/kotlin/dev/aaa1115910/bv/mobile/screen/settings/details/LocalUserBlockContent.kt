@@ -1,0 +1,54 @@
+package dev.aaa1115910.bv.mobile.screen.settings.details
+
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import dev.aaa1115910.bv.util.toast
+import dev.aaa1115910.bv.viewmodel.LocalUserBlockViewModel
+import org.koin.androidx.compose.koinViewModel
+
+@Composable
+fun LocalUserBlockContent(
+    modifier: Modifier = Modifier,
+    viewModel: LocalUserBlockViewModel = koinViewModel()
+) {
+    val ids by viewModel.blocked.collectAsState()
+    val context = LocalContext.current
+    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { Text("屏蔽名单保存在本机，无需登录。过滤推荐、搜索、动态、评论和相关推荐。", style = MaterialTheme.typography.bodyMedium) }
+        item {
+            OutlinedTextField(
+                value = viewModel.input, onValueChange = { viewModel.input = it },
+                modifier = Modifier.fillMaxWidth(), enabled = !viewModel.saving,
+                label = { Text("UID，多个可用逗号或换行分隔") }, minLines = 2, maxLines = 4
+            )
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = viewModel::add, enabled = !viewModel.saving && viewModel.input.isNotBlank()) { Text("添加") }
+                OutlinedButton(onClick = viewModel::import, enabled = !viewModel.saving && viewModel.input.isNotBlank()) { Text("合并导入") }
+                TextButton(onClick = {
+                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                        .setPrimaryClip(ClipData.newPlainText("本地屏蔽 UID", viewModel.export()))
+                    "已复制屏蔽名单".toast(context)
+                }, enabled = ids.isNotEmpty()) { Text("导出") }
+            }
+        }
+        viewModel.message?.let { item { Text(it, color = MaterialTheme.colorScheme.primary) } }
+        item { Text("已屏蔽 ${ids.size} 个 UID", style = MaterialTheme.typography.titleMedium) }
+        items(ids.sorted(), key = { it }) { id ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("UID $id", modifier = Modifier.padding(vertical = 12.dp))
+                TextButton(onClick = { viewModel.remove(id) }, enabled = !viewModel.saving) { Text("解除屏蔽") }
+            }
+        }
+    }
+}

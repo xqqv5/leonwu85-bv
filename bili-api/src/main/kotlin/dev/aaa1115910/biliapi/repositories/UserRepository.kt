@@ -267,6 +267,31 @@ class UserRepository(
         return data.dynIdStr.ifBlank { data.dynId.takeIf { it > 0L }?.toString().orEmpty() }
     }
 
+    suspend fun repostDynamic(dynamicId: String, text: String, uploadId: String): String {
+        require(dynamicId.toLongOrNull()?.let { it > 0L } == true) { "动态 ID 无效" }
+        val response = BiliHttpApi.createDynamic(
+            dynReq = buildJsonObject {
+                putJsonObject("content") {
+                    put("contents", JsonArray(listOf(dynamicTextContent(text.ifBlank { "转发动态" }))))
+                }
+                put("scene", 4)
+                put("upload_id", uploadId)
+                putJsonObject("meta") {
+                    putJsonObject("app_meta") {
+                        put("from", "create.dynamic.web")
+                        put("mobi_app", "web")
+                    }
+                }
+            },
+            webRepostSrc = buildJsonObject { put("dyn_id_str", dynamicId) },
+            csrf = authRepository.biliJct ?: error("账号未登录"),
+            sessData = authRepository.sessionData ?: error("账号未登录"),
+            dedeUserID = authRepository.mid,
+            buvid3 = authRepository.buvid3
+        ).getResponseData()
+        return response.dynIdStr.ifBlank { response.dynId.takeIf { it > 0 }?.toString().orEmpty() }
+    }
+
     suspend fun uploadDynamicImage(fileName: String, bytes: ByteArray): DynamicImageDraft {
         val response = BiliHttpApi.uploadDynamicImage(
             fileName = fileName,

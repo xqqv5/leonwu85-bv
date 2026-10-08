@@ -56,6 +56,11 @@ data class FavoriteFolderMetadata(
 ) {
     val isDefault: Boolean get() = (attr and 2) == 0
     val isPublic: Boolean get() = (attr and 1) == 0
+    val capacity: Int get() = if (isDefault) 50_000 else 1_000
+    val remainingCapacity: Int get() = (capacity - mediaCount).coerceAtLeast(0)
+    val isFull: Boolean get() = remainingCapacity == 0
+    // 已收藏的项目仍可取消；满容量只限制新增。
+    val canSelect: Boolean get() = videoInThisFav || !isFull
 
     companion object {
         fun fromHttpFavoriteFolderInfo(httpFavoriteFolderInfo: dev.aaa1115910.biliapi.http.entity.user.favorite.FavoriteFolderInfo): FavoriteFolderMetadata {
@@ -121,8 +126,10 @@ data class FavoriteItem(
     val link: String,
     val favTime: Long,
     val bvid: String,
-    val cntInfo: CntInfo
+    val cntInfo: CntInfo,
+    val attr: Int = 0
 ) {
+    val isInvalid: Boolean get() = attr == 1 || attr == 9
     companion object {
         fun fromHttpFavoriteItem(httpFavoriteItem: dev.aaa1115910.biliapi.http.entity.user.favorite.FavoriteItem): FavoriteItem {
             return FavoriteItem(
@@ -137,7 +144,8 @@ data class FavoriteItem(
                 link = httpFavoriteItem.link,
                 favTime = httpFavoriteItem.favTime,
                 bvid = httpFavoriteItem.bvid,
-                cntInfo = httpFavoriteItem.cntInfo
+                cntInfo = httpFavoriteItem.cntInfo,
+                attr = httpFavoriteItem.attr
             )
         }
     }

@@ -166,8 +166,12 @@ fun OfflineCacheScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    entries.groupBy { it.groupKey }.forEach { (groupKey, groupEntries) ->
+                        item(key = "group-$groupKey") {
+                            Text("${groupEntries.first().groupTitle} · ${groupEntries.size} 项", style = MaterialTheme.typography.titleMedium)
+                        }
                     items(
-                        items = entries,
+                        items = groupEntries,
                         key = { "entry-${it.aid}-${it.cid}" }
                     ) { entry ->
                         OfflineCacheEntryItem(
@@ -184,12 +188,16 @@ fun OfflineCacheScreen(
                                     playOfflineCache = true
                                 )
                             },
+                            onUpdateSkips = {
+                                runCacheAction { offlineVideoCacheService.updateSkipMetadata(entry.aid, entry.cid) }
+                            },
                             onDelete = {
                                 runCacheAction {
                                     offlineVideoCacheService.delete(entry.aid, entry.cid)
                                 }
                             }
                         )
+                    }
                     }
                     item {
                         Spacer(modifier = Modifier.navigationBarsPadding())
@@ -334,6 +342,7 @@ private fun OfflineCacheTaskItem(
 private fun OfflineCacheEntryItem(
     entry: OfflineVideoCacheEntry,
     onPlay: () -> Unit,
+    onUpdateSkips: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
@@ -381,6 +390,9 @@ private fun OfflineCacheEntryItem(
             }
             IconButton(onClick = onPlay) {
                 Icon(Icons.Rounded.PlayArrow, contentDescription = "播放")
+            }
+            IconButton(onClick = onUpdateSkips) {
+                Icon(Icons.Rounded.Refresh, contentDescription = "更新跳过片段")
             }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Rounded.Delete, contentDescription = "删除")

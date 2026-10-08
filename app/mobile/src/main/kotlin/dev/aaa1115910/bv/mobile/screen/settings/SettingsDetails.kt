@@ -15,6 +15,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import dev.aaa1115910.bv.mobile.screen.settings.details.LocalUserBlockContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.AboutContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.AdvanceContent
 import dev.aaa1115910.bv.mobile.screen.settings.details.AudioVideoContent
@@ -68,6 +69,7 @@ fun SettingsDetails(
             MobileSettings.Play -> PlayContent(modifier = contentModifier)
             MobileSettings.Mpv -> MpvContent(modifier = contentModifier)
             MobileSettings.SponsorBlock -> SponsorBlockContent(modifier = contentModifier)
+            MobileSettings.LocalUserBlock -> LocalUserBlockContent(modifier = contentModifier)
             MobileSettings.About -> AboutContent(modifier = contentModifier)
             MobileSettings.Debug -> DebugContent(modifier = contentModifier)
             MobileSettings.Advance -> AdvanceContent(modifier = contentModifier)

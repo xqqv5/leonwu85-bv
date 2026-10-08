@@ -4,6 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewModelScope
+import dev.aaa1115910.bv.repository.LocalUserBlockRepository
+import dev.aaa1115910.bv.repository.observeList
 import androidx.lifecycle.ViewModel
 import dev.aaa1115910.biliapi.entity.rank.PopularVideoPage
 import dev.aaa1115910.biliapi.entity.ugc.UgcItem
@@ -21,10 +24,13 @@ import org.koin.core.annotation.KoinViewModel
 
 @KoinViewModel
 class PopularViewModel(
-    private val recommendVideoRepository: RecommendVideoRepository
+    private val recommendVideoRepository: RecommendVideoRepository,
+    private val localUserBlocks: LocalUserBlockRepository
 ) : ViewModel() {
     private val logger = KotlinLogging.logger {}
     val popularVideoList = mutableStateListOf<UgcItem>()
+
+    init { localUserBlocks.observeList(viewModelScope, popularVideoList) { it.authorId } }
 
     private var nextPage = PopularVideoPage()
     var refreshing by mutableStateOf(false)
@@ -54,7 +60,9 @@ class PopularViewModel(
             )
             beforeAppendData()
             nextPage = popularVideoData.nextPage
-            popularVideoList.addAllWithMainContext(popularVideoData.list)
+            withContext(Dispatchers.Main.immediate) {
+                popularVideoList.addAll(popularVideoData.list.filterNot { localUserBlocks.isBlocked(it.authorId) })
+            }
         }.onFailure {
             logger.fError { "Load popular video list failed: ${it.stackTraceToString()}" }
             withContext(Dispatchers.Main) {

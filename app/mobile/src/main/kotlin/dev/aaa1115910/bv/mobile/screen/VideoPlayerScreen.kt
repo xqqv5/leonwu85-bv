@@ -225,6 +225,7 @@ import dev.aaa1115910.bv.mobile.R as MobileR
 import dev.aaa1115910.bv.mobile.util.saveImageToGallery
 import dev.aaa1115910.bv.offline.OfflineVideoCacheStatus
 import dev.aaa1115910.bv.offline.OfflineVideoCacheTaskState
+import dev.aaa1115910.bv.offline.toOfflineSeasonMetadata
 import dev.aaa1115910.bv.offline.OfflineVideoCacheTarget
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerDanmakuMasksData
@@ -2565,7 +2566,7 @@ private fun FavoriteFolderDialog(
                         val selected = selectedIds.contains(folder.id)
                         FilterChip(
                             selected = selected,
-                            enabled = enabled,
+                            enabled = enabled && (selected || folder.canSelect),
                             onClick = {
                                 if (selected) {
                                     selectedIds.remove(folder.id)
@@ -2575,7 +2576,7 @@ private fun FavoriteFolderDialog(
                             },
                             label = {
                                 Text(
-                                    text = folder.title,
+                                    text = folder.title + if (folder.isFull) " · 已满" else "",
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -2940,6 +2941,7 @@ private fun buildOfflineCacheSheetItems(
                     pages.map { page ->
                         val title = "${episode.title} - P${page.index} ${page.title}"
                         val target = OfflineVideoCacheTarget(
+                            season = videoDetail.toOfflineSeasonMetadata(),
                             aid = episode.aid,
                             bvid = episode.bvid,
                             cid = page.cid,
@@ -2967,6 +2969,7 @@ private fun buildOfflineCacheSheetItems(
                     val page = pages.firstOrNull()
                     val cid = page?.cid ?: episode.cid
                     val target = OfflineVideoCacheTarget(
+                        season = videoDetail.toOfflineSeasonMetadata(),
                         aid = episode.aid,
                         bvid = episode.bvid,
                         cid = cid,
@@ -3000,6 +3003,7 @@ private fun buildOfflineCacheSheetItems(
 
     return videoDetail.pages.map { page ->
         val target = OfflineVideoCacheTarget(
+            season = videoDetail.toOfflineSeasonMetadata(),
             aid = videoDetail.aid,
             bvid = videoDetail.bvid,
             cid = page.cid,

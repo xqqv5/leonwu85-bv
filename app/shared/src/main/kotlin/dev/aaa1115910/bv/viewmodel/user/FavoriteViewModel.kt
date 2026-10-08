@@ -102,6 +102,10 @@ class FavoriteViewModel(
         if (operating || updatingFolders || selectedIds.isEmpty() || transferTargets.none { it.id == targetId }) return
         val source = currentFavoriteFolderMetadata ?: return
         if (source.mid != Prefs.uid) return
+        if (favorites.any { it.avid in selectedIds && it.isInvalid }) {
+            transferError = "所选内容包含失效视频，请取消选择或清理后重试"
+            return
+        }
         val request = FavoriteTransferRequest(source.id, targetId,
             favorites.filter { it.avid in selectedIds }.map { it.avid to FavoriteItemType.Video })
         filterJob?.cancel()
@@ -235,7 +239,8 @@ class FavoriteViewModel(
                         upId = favoriteItem.upper.mid,
                         upFace = favoriteItem.upper.face,
                         time = favoriteItem.duration * 1000L,
-                        pubTime = favoriteItem.favTime.toSmartDate() + context.getString(R.string.favorite_at)
+                        pubTime = favoriteItem.favTime.toSmartDate() + context.getString(R.string.favorite_at),
+                        isInvalid = favoriteItem.isInvalid
                     )
                 }
                 withContext(Dispatchers.Main) {

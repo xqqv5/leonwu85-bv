@@ -7,6 +7,10 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewModelScope
+import dev.aaa1115910.bv.repository.LocalUserBlockRepository
+import dev.aaa1115910.bv.repository.withoutBlockedUsers
+import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModel
 import dev.aaa1115910.biliapi.entity.reply.Comment
 import dev.aaa1115910.biliapi.entity.reply.CommentPage
@@ -33,7 +37,8 @@ import org.koin.core.annotation.KoinViewModel
 @KoinViewModel
 class CommentViewModel(
     private val commentRepository: CommentRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val localUserBlocks: LocalUserBlockRepository
 ) : ViewModel() {
     companion object {
         val logger = KotlinLogging.logger {}
@@ -46,6 +51,22 @@ class CommentViewModel(
     val replies = mutableStateListOf<Comment>()
     var replyRootComment by mutableStateOf<Comment?>(null)
     var commentVote by mutableStateOf<CommentVote?>(null)
+
+    init {
+        viewModelScope.launch {
+            localUserBlocks.blocked.collect { ids ->
+                val visibleComments = comments.toList().withoutBlockedUsers(ids)
+                val visibleReplies = replies.toList().withoutBlockedUsers(ids)
+                comments.clear(); comments.addAll(visibleComments)
+                replies.clear(); replies.addAll(visibleReplies)
+                replyRootComment = replyRootComment?.takeUnless { it.mid in ids }
+                    ?.let { it.copy(replies = it.replies.withoutBlockedUsers(ids)) }
+            }
+        }
+    }
+
+    suspend fun blockCommentUserLocally(comment: Comment): Result<Unit> =
+        withContext(Dispatchers.IO) { localUserBlocks.add(comment.mid) }
 
     var rpid by mutableLongStateOf(0L)
     var rpCount by mutableIntStateOf(0)
@@ -126,7 +147,9 @@ class CommentViewModel(
             if (isFirstPage) {
                 commentVote = commentsData.vote
             }
-            comments.addAll(commentsData.comments)
+            withContext(Dispatchers.Main.immediate) {
+                comments.addAll(commentsData.comments.withoutBlockedUsers(localUserBlocks.blocked.value))
+            }
         }.onFailure {
             logger.fException(it) { "Load more comments failed" }
             withContext(Dispatchers.Main) {
@@ -198,8 +221,11 @@ class CommentViewModel(
             )
             nextCommentReplyPage = commentRepliesData.nextPage
             hasMoreReplies = commentRepliesData.hasNext
-            if (replyRootComment == null) replyRootComment = commentRepliesData.rootComment
-            replies.addAll(commentRepliesData.replies)
+            withContext(Dispatchers.Main.immediate) {
+                if (replyRootComment == null) replyRootComment = commentRepliesData.rootComment
+                    ?.takeUnless { localUserBlocks.isBlocked(it.mid) }
+                replies.addAll(commentRepliesData.replies.withoutBlockedUsers(localUserBlocks.blocked.value))
+            }
         }.onFailure {
             logger.fException(it) { "Load more replies failed" }
         }

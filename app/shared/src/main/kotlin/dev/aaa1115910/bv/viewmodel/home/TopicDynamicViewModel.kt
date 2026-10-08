@@ -5,6 +5,9 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewModelScope
+import dev.aaa1115910.bv.repository.LocalUserBlockRepository
+import dev.aaa1115910.bv.repository.observeList
 import androidx.lifecycle.ViewModel
 import dev.aaa1115910.biliapi.entity.user.DynamicTopicFeedItem
 import dev.aaa1115910.biliapi.repositories.UserRepository
@@ -16,9 +19,12 @@ import org.koin.core.annotation.KoinViewModel
 
 @KoinViewModel
 class TopicDynamicViewModel(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val localUserBlocks: LocalUserBlockRepository
 ) : ViewModel() {
     val items = mutableStateListOf<DynamicTopicFeedItem>()
+
+    init { localUserBlocks.observeList(viewModelScope, items) { (it as? DynamicTopicFeedItem.DynamicCard)?.dynamic?.author?.mid ?: 0L } }
 
     var topicId by mutableLongStateOf(0L)
         private set
@@ -63,7 +69,7 @@ class TopicDynamicViewModel(
                     userRepository.getDynamicTopicFeed(topicId = topicId, sortBy = sortBy)
                 }
                 items.clear()
-                items.addAll(page.items)
+                items.addAll(page.items.filterNot { localUserBlocks.isBlocked((it as? DynamicTopicFeedItem.DynamicCard)?.dynamic?.author?.mid ?: 0L) })
                 offset = page.offset.takeIf { it.isNotBlank() }
                 hasMore = page.hasMore
             } catch (error: Throwable) {
@@ -88,7 +94,7 @@ class TopicDynamicViewModel(
                         offset = offset
                     )
                 }
-                items.addAll(page.items)
+                items.addAll(page.items.filterNot { localUserBlocks.isBlocked((it as? DynamicTopicFeedItem.DynamicCard)?.dynamic?.author?.mid ?: 0L) })
                 offset = page.offset.takeIf { it.isNotBlank() }
                 hasMore = page.hasMore
             } catch (error: Throwable) {
@@ -110,7 +116,7 @@ class TopicDynamicViewModel(
                 }
                 if (page.items.isNotEmpty() && items.getOrNull(index) == fold) {
                     items.removeAt(index)
-                    items.addAll(index, page.items)
+                    items.addAll(index, page.items.filterNot { localUserBlocks.isBlocked((it as? DynamicTopicFeedItem.DynamicCard)?.dynamic?.author?.mid ?: 0L) })
                 }
             } catch (error: Throwable) {
                 errorMessage = error.localizedMessage ?: "Unable to expand folded dynamics"

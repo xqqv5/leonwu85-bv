@@ -102,10 +102,11 @@ internal fun FavoriteTransferControls(
                         contentPadding = PaddingValues(4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(targets, key = { _, folder -> folder.id }) { index, folder ->
                             TvToolbarAction(
-                                text = folder.title,
+                                text = folder.title + if (folder.isFull) " · 已满" else " · 剩余 ${folder.remainingCapacity}",
                                 icon = if (folder.id == targetId) Icons.Rounded.Done else Icons.Rounded.Folder,
                                 selected = folder.id == targetId,
                                 onClick = { targetId = folder.id },
+                                available = !folder.isFull,
                                 modifier = Modifier.fillMaxWidth().focusRequester(folderFocus[index])
                                     .focusProperties {
                                         if (index == 0) up = FocusRequester.Cancel
@@ -126,7 +127,7 @@ internal fun FavoriteTransferControls(
                     onClick = {
                         targetId?.let { viewModel.transferSelected(it, mode) }
                         pendingMode = null
-                    }, available = targetId != null && targets.any { it.id == targetId })
+                    }, available = targetId != null && targets.any { it.id == targetId && !it.isFull })
             },
             dismissButton = {
                 TvToolbarAction("取消", modifier = Modifier.focusRequester(cancelFocus).focusProperties {

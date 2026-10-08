@@ -75,6 +75,9 @@ import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.entity.user.ArticleParagraph
 import dev.aaa1115910.biliapi.entity.user.DynamicItem
 import dev.aaa1115910.biliapi.entity.user.DynamicType
+import dev.aaa1115910.bv.component.RepostPublishDialog
+import dev.aaa1115910.bv.util.Prefs
+import dev.aaa1115910.bv.util.toast
 import dev.aaa1115910.bv.component.DynamicRichText
 import dev.aaa1115910.bv.tv.activities.dynamic.DynamicDetailActivity
 import dev.aaa1115910.bv.tv.activities.video.SeasonInfoActivity
@@ -107,6 +110,7 @@ fun DynamicDetailScreen(
     var dynamicItem by remember { mutableStateOf<DynamicItem?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var showCommentPanel by remember { mutableStateOf(false) }
+    var showRepostDialog by remember { mutableStateOf(false) }
     var showImagePreview by remember { mutableStateOf(false) }
     var imagePreviewPictures by remember { mutableStateOf<List<Picture>>(emptyList()) }
     var imagePreviewIndex by remember { mutableIntStateOf(0) }
@@ -175,7 +179,7 @@ fun DynamicDetailScreen(
                     return@onPreviewKeyEvent true
                 }
 
-                if (isLoading || dynamicItem == null || showCommentPanel || showImagePreview) {
+                if (isLoading || dynamicItem == null || showCommentPanel || showImagePreview || showRepostDialog) {
                     return@onPreviewKeyEvent false
                 }
 
@@ -392,6 +396,11 @@ fun DynamicDetailScreen(
                         }
                     }
 
+                    Button(onClick = {
+                        if (!Prefs.isLogin) "账号未登录".toast(context)
+                        else showRepostDialog = true
+                    }) { Text("转发并评论") }
+
                     // 评论按钮
                     Button(
                         modifier = Modifier
@@ -544,6 +553,13 @@ fun DynamicDetailScreen(
                 }
             }
         }
+    }
+
+    if (showRepostDialog && dynamicItem != null) {
+        RepostPublishDialog(item = dynamicItem!!, onDismiss = { showRepostDialog = false }, onSuccess = {
+            showRepostDialog = false
+            "发布成功".toast(context)
+        })
     }
 
     // 评论浮层

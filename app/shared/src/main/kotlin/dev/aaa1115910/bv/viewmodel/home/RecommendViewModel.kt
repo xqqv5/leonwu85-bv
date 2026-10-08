@@ -4,6 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewModelScope
+import dev.aaa1115910.bv.repository.LocalUserBlockRepository
+import dev.aaa1115910.bv.repository.observeList
 import androidx.lifecycle.ViewModel
 import dev.aaa1115910.biliapi.entity.home.RecommendPage
 import dev.aaa1115910.biliapi.entity.ugc.UgcItem
@@ -21,10 +24,13 @@ import org.koin.core.annotation.KoinViewModel
 
 @KoinViewModel
 class RecommendViewModel(
-    private val recommendVideoRepository: RecommendVideoRepository
+    private val recommendVideoRepository: RecommendVideoRepository,
+    private val localUserBlocks: LocalUserBlockRepository
 ) : ViewModel() {
     private val logger = KotlinLogging.logger {}
     val recommendVideoList = mutableStateListOf<UgcItem>()
+
+    init { localUserBlocks.observeList(viewModelScope, recommendVideoList) { it.authorId } }
 
     private var nextPage = RecommendPage()
     var refreshing by mutableStateOf(true)
@@ -63,7 +69,9 @@ class RecommendViewModel(
             )
             beforeAppendData()
             nextPage = recommendData.nextPage
-            recommendVideoList.addAllWithMainContext(recommendData.items)
+            withContext(Dispatchers.Main.immediate) {
+                recommendVideoList.addAll(recommendData.items.filterNot { localUserBlocks.isBlocked(it.authorId) })
+            }
         }.onFailure {
             logger.fError { "Load recommend video list failed: ${it.stackTraceToString()}" }
             withContext(Dispatchers.Main) {

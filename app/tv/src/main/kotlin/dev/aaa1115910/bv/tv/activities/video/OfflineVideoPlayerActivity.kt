@@ -1,7 +1,9 @@
 package dev.aaa1115910.bv.tv.activities.video
 
+import dev.aaa1115910.bv.player.PlayerMediaSession
 import android.content.Context
 import android.content.Intent
+import androidx.lifecycle.lifecycleScope
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.setContent
@@ -42,6 +44,7 @@ class OfflineVideoPlayerActivity : TvComponentActivity() {
     }
 
     private val playerViewModel: VideoPlayerV3ViewModel by viewModel()
+    private var systemMediaSession: PlayerMediaSession? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,6 +62,7 @@ class OfflineVideoPlayerActivity : TvComponentActivity() {
             return
         }
 
+        systemMediaSession = PlayerMediaSession(this, lifecycleScope, playerViewModel)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
             BVTheme(forceDark = true) {
@@ -74,6 +78,8 @@ class OfflineVideoPlayerActivity : TvComponentActivity() {
     }
 
     override fun onDestroy() {
+        systemMediaSession?.close()
+        systemMediaSession = null
         super.onDestroy()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }

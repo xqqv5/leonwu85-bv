@@ -4,6 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewModelScope
+import dev.aaa1115910.bv.repository.LocalUserBlockRepository
+import dev.aaa1115910.bv.repository.observeList
 import androidx.lifecycle.ViewModel
 import dev.aaa1115910.biliapi.entity.ugc.UgcItem
 import dev.aaa1115910.biliapi.repositories.RecommendVideoRepository
@@ -19,11 +22,14 @@ import org.koin.core.annotation.KoinViewModel
 
 @KoinViewModel
 class RankViewModel(
-    private val recommendVideoRepository: RecommendVideoRepository
+    private val recommendVideoRepository: RecommendVideoRepository,
+    private val localUserBlocks: LocalUserBlockRepository
 ) : ViewModel() {
     private val logger = KotlinLogging.logger {}
 
     val allRankVideoList = mutableStateListOf<UgcItem>()
+
+    init { localUserBlocks.observeList(viewModelScope, allRankVideoList) { it.authorId } }
     var loading by mutableStateOf(false)
     var loaded by mutableStateOf(false)
 
@@ -33,7 +39,10 @@ class RankViewModel(
         logger.fInfo { "Load all rank videos" }
         runCatching {
             val videos = recommendVideoRepository.getRankVideos(rid = 0)
-            allRankVideoList.swapListWithMainContext(videos)
+            withContext(Dispatchers.Main.immediate) {
+                allRankVideoList.clear()
+                allRankVideoList.addAll(videos.filterNot { localUserBlocks.isBlocked(it.authorId) })
+            }
             loaded = true
         }.onFailure {
             logger.fError { "Load all rank video list failed: ${it.stackTraceToString()}" }

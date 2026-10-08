@@ -4,6 +4,7 @@ import android.app.PictureInPictureParams
 import android.app.PendingIntent
 import android.app.RemoteAction
 import android.content.BroadcastReceiver
+import dev.aaa1115910.bv.player.PlayerMediaSession
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -61,6 +62,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.androidx.viewmodel.ext.android.viewModel
@@ -124,6 +126,8 @@ class VideoPlayerActivity : ComponentActivity() {
         private const val EXTRA_PIP_PLAYBACK_CONTROL = "pip_playback_control"
         private const val PIP_CONTROL_PLAY = 1
         private const val PIP_CONTROL_PAUSE = 2
+        private const val PIP_CONTROL_REWIND = 3
+        private const val PIP_CONTROL_FORWARD = 4
 
         private fun formatPopularity(count: Int): String {
             return when {
@@ -354,6 +358,7 @@ class VideoPlayerActivity : ComponentActivity() {
     }
 
     private val playerViewModel: VideoPlayerV3ViewModel by viewModel()
+    private var systemMediaSession: PlayerMediaSession? = null
     private val commentViewModel: CommentViewModel by viewModel()
     private val seasonViewModel: SeasonViewModel by viewModel()
     private val videoDetailViewModel: VideoDetailViewModel by viewModel()
@@ -389,7 +394,14 @@ class VideoPlayerActivity : ComponentActivity() {
         val activitySeasonViewModel = seasonViewModel
         val activityVideoDetailViewModel = videoDetailViewModel
 
+        systemMediaSession = PlayerMediaSession(this, lifecycleScope, playerViewModel)
         registerPictureInPictureActionReceiver()
+        lifecycleScope.launch {
+            while (kotlinx.coroutines.currentCoroutineContext().isActive) {
+                if (pipModeActive) refreshPictureInPictureActions()
+                kotlinx.coroutines.delay(500)
+            }
+        }
 
         val launchArgs = VideoLaunchArgs.fromIntent(intent)
         initVideoPlayer(launchArgs = launchArgs)
@@ -444,7 +456,11 @@ class VideoPlayerActivity : ComponentActivity() {
 
         return PictureInPictureParams.Builder()
             .setAspectRatio(aspectRatio)
-            .setActions(listOf(buildPictureInPicturePlaybackAction()))
+            .setActions(buildList {
+                if (!playerViewModel.isLive) add(buildPictureInPictureAction(PIP_CONTROL_REWIND, "后退 10 秒", android.R.drawable.ic_media_rew))
+                add(buildPictureInPicturePlaybackAction())
+                if (!playerViewModel.isLive) add(buildPictureInPictureAction(PIP_CONTROL_FORWARD, "前进 10 秒", android.R.drawable.ic_media_ff))
+            })
             .build()
     }
 
@@ -458,6 +474,11 @@ class VideoPlayerActivity : ComponentActivity() {
         } else {
             android.R.drawable.ic_media_play
         }
+        return buildPictureInPictureAction(control, label, iconResource)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun buildPictureInPictureAction(control: Int, label: String, iconResource: Int): RemoteAction {
         val intent = Intent(ACTION_PIP_PLAYBACK_CONTROL)
             .setPackage(packageName)
             .putExtra(EXTRA_PIP_PLAYBACK_CONTROL, control)
@@ -492,27 +513,14 @@ class VideoPlayerActivity : ComponentActivity() {
             when (intent.getIntExtra(EXTRA_PIP_PLAYBACK_CONTROL, 0)) {
                 PIP_CONTROL_PLAY -> setPictureInPicturePlaybackPlaying(true)
                 PIP_CONTROL_PAUSE -> setPictureInPicturePlaybackPlaying(false)
+                PIP_CONTROL_REWIND -> playerViewModel.seekByExternalControls(-10_000L)
+                PIP_CONTROL_FORWARD -> playerViewModel.seekByExternalControls(10_000L)
             }
         }
     }
 
     private fun setPictureInPicturePlaybackPlaying(playing: Boolean) {
-        val player = playerViewModel.videoPlayer ?: return
-        if (playing) {
-            player.start()
-            if (playerViewModel.isLive) {
-                playerViewModel.resumeLiveDanmakuIfNeeded()
-            } else {
-                playerViewModel.danmakuPlayer?.start()
-            }
-        } else {
-            player.pause()
-            if (playerViewModel.isLive) {
-                playerViewModel.stopLiveDanmaku()
-            } else {
-                playerViewModel.danmakuPlayer?.pause()
-            }
-        }
+        playerViewModel.setExternalPlaybackPlaying(playing)
         refreshPictureInPictureActions()
     }
 
@@ -581,6 +589,7 @@ class VideoPlayerActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.getBooleanExtra("mediaSessionReturn", false)) return
         setIntent(intent)
 
         val launchArgs = VideoLaunchArgs.fromIntent(intent)
@@ -761,7 +770,7 @@ class VideoPlayerActivity : ComponentActivity() {
             suspend fun applyOfflineDetailFallback() {
                 val entry = offlineEntry ?: return
                 val entries = withContext(Dispatchers.IO) {
-                    playerViewModel.completedOfflineCacheEntries(entry.aid)
+                    playerViewModel.completedOfflineCacheGroupEntries(entry)
                 }
                 videoDetailViewModel.applyOfflineCacheFallback(
                     entry = entry,
@@ -1004,6 +1013,8 @@ class VideoPlayerActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        systemMediaSession?.close()
+        systemMediaSession = null
         if (pipActionReceiverRegistered) {
             unregisterReceiver(pictureInPictureActionReceiver)
             pipActionReceiverRegistered = false

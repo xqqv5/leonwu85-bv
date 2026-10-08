@@ -168,7 +168,7 @@ internal fun FavoriteTransferSheet(
                         ) {
                             Row(
                                 Modifier.fillMaxWidth()
-                                    .selectable(selected = selected, role = Role.RadioButton, onClick = { targetId = folder.id })
+                                    .selectable(selected = selected, enabled = !folder.isFull, role = Role.RadioButton, onClick = { targetId = folder.id })
                                     .padding(horizontal = 16.dp, vertical = 14.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -179,11 +179,11 @@ internal fun FavoriteTransferSheet(
                                     Text(folder.title, style = MaterialTheme.typography.titleSmall, maxLines = 2,
                                         overflow = TextOverflow.Ellipsis,
                                         color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
-                                    Text("${folder.mediaCount} 个视频 · ${if (folder.isPublic) "公开" else "私密"}",
+                                    Text("${folder.mediaCount}/${folder.capacity} · ${if (folder.isFull) "已满" else "剩余 ${folder.remainingCapacity} 个位置"}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                RadioButton(selected = selected, onClick = null)
+                                RadioButton(selected = selected, onClick = null, enabled = !folder.isFull)
                             }
                         }
                     }
@@ -196,7 +196,7 @@ internal fun FavoriteTransferSheet(
                 TextButton(onClick = onDismiss, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("取消") }
                 Button(
                     onClick = { targetId?.let(onConfirm) },
-                    enabled = selectedCount > 0 && targets.any { it.id == targetId },
+                    enabled = selectedCount > 0 && targets.any { it.id == targetId && !it.isFull },
                     modifier = Modifier.weight(2f).heightIn(min = 48.dp)
                 ) { Text("确认$action") }
             }

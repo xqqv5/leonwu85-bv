@@ -277,6 +277,9 @@ class ExoMediaPlayer(
     override val isPlaying: Boolean
         get() = mPlayer?.isPlaying == true
 
+    override val isBuffering: Boolean
+        get() = mPlayer?.let { it.playWhenReady && it.playbackState == Player.STATE_BUFFERING } == true
+
     override val isSeekable: Boolean
         get() = mPlayer?.isCommandAvailable(COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM) == true
 

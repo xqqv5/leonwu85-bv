@@ -200,6 +200,7 @@ fun HttpClient.encApiSign() = plugin(HttpSend)
             // 目前看来需要计算 wbi sign 的接口之前忘记计算 app sign 都通过校验了🤯
             HttpMethod.Get -> {
                 val isWbiRequest = request.url.encodedPath.contains("wbi") ||
+                        request.url.encodedPath == "/x/web-interface/suggest" ||
                         request.url.encodedPath.contains("/pgc/player/web/playurl") ||
                         request.url.encodedPath.contains("/pgc/player/web/v2/playurl")
                 val isAppRequest =

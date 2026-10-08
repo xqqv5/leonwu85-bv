@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.mobile.screen
 
+import dev.aaa1115910.bv.util.toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -141,6 +142,7 @@ fun FavoriteScreen(
         onClickTab = favoriteViewModel::selectFolder,
         onClickVideo = { video ->
             if (favoriteViewModel.selectionMode) favoriteViewModel.toggleSelected(video.avid)
+            else if (video.isInvalid) "该视频已失效，可移出或清理收藏夹".toast(context)
             else if (!favoriteViewModel.operating) VideoPlayerActivity.actionStart(context, video = video)
         },
         onRemoveVideo = { pendingRemove = it },

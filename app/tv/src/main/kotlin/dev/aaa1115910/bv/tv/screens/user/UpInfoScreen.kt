@@ -717,6 +717,7 @@ private fun HeaderActions(
     onLiveClick: () -> Unit,
     onRefreshClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val isSelf = viewModel.upMid == Prefs.uid
     val isLive = viewModel.liveRoom?.liveStatus == 1
     val followText = when {
@@ -758,6 +759,18 @@ private fun HeaderActions(
             containerColor = if (isLive) UpSpaceLive else Color.White.copy(alpha = 0.16f),
             onClick = onLiveClick
         )
+        if (!isSelf) {
+            HeaderActionButton(
+                modifier = Modifier.width(112.dp),
+                text = if (viewModel.isLocallyBlocked) "解除屏蔽" else "本地屏蔽",
+                containerColor = Color.White.copy(alpha = 0.16f),
+                onClick = {
+                    viewModel.toggleLocalBlock { blocked, success ->
+                        (if (!success) "保存失败" else if (blocked) "已本地屏蔽，可在设置中解除" else "已解除本地屏蔽").toast(context)
+                    }
+                }
+            )
+        }
         HeaderActionButton(
             modifier = Modifier.width(76.dp),
             text = "刷新",

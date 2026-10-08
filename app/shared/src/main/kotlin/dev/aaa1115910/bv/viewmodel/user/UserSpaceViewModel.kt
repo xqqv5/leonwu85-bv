@@ -12,6 +12,7 @@ import dev.aaa1115910.biliapi.entity.user.SpaceVideoOrder
 import dev.aaa1115910.biliapi.entity.user.SpaceVideoData
 import dev.aaa1115910.biliapi.entity.user.mergePage
 import kotlinx.coroutines.CancellationException
+import dev.aaa1115910.bv.repository.LocalUserBlockRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.aaa1115910.biliapi.entity.season.FollowingSeason
@@ -53,7 +54,8 @@ enum class UserSpaceTab(val title: String) {
 class UserSpaceViewModel(
     private val userRepository: UserRepository,
     private val favoriteRepository: FavoriteRepository,
-    private val seasonRepository: SeasonRepository
+    private val seasonRepository: SeasonRepository,
+    private val localUserBlocks: LocalUserBlockRepository
 ) : ViewModel() {
     companion object {
         private val logger = KotlinLogging.logger { }
@@ -184,6 +186,27 @@ class UserSpaceViewModel(
     val chargeUsers: List<AppUserSpaceElecUser>
         get() = appSpaceData?.elec?.list.orEmpty()
 
+    var isLocallyBlocked by mutableStateOf(false)
+        private set
+
+    init {
+        viewModelScope.launch {
+            localUserBlocks.blocked.collect { isLocallyBlocked = localUserBlocks.isBlocked(upMid) }
+        }
+    }
+
+    fun toggleLocalBlock(afterModify: (Boolean, Boolean) -> Unit = { _, _ -> }) {
+        val mid = upMid
+        if (mid <= 0L) return
+        val target = !localUserBlocks.isBlocked(mid)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                if (target) localUserBlocks.add(mid) else localUserBlocks.remove(mid)
+            }
+            afterModify(target, result.isSuccess)
+        }
+    }
+
     val isBlacklisted: Boolean
         get() = appRelation == 128
 
@@ -194,6 +217,7 @@ class UserSpaceViewModel(
     fun initialize(mid: Long, name: String, face: String = "") {
         if (upMid == mid && (userInfo != null || userCardInfo != null || profileLoading)) return
         upMid = mid
+        isLocallyBlocked = localUserBlocks.isBlocked(mid)
         upName = name
         upFace = face
         resetSpace()

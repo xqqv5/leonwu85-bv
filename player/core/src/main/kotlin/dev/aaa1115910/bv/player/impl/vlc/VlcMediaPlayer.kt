@@ -272,6 +272,9 @@ class VlcMediaPlayer(
     override val isPlaying: Boolean
         get() = mediaPlayer?.isPlaying == true
 
+    override val isBuffering: Boolean
+        get() = playRequested && (startupBuffering || isRebuffering || isSeeking)
+
     override val isSeekable: Boolean
         get() = _isSeekable
 

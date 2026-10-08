@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.aaa1115910.biliapi.entity.search.searchKey
 import dev.aaa1115910.biliapi.repositories.*
+import dev.aaa1115910.bv.repository.LocalUserBlockRepository
 import dev.aaa1115910.bv.R
 import dev.aaa1115910.bv.util.Partition
 import dev.aaa1115910.bv.util.Prefs
@@ -17,7 +18,10 @@ import kotlinx.coroutines.withContext
 import org.koin.core.annotation.KoinViewModel
 
 @KoinViewModel
-class SearchResultViewModel(private val searchRepository: SearchRepository) : ViewModel() {
+class SearchResultViewModel(
+    private val searchRepository: SearchRepository,
+    private val localUserBlocks: LocalUserBlockRepository
+) : ViewModel() {
     var keyword by mutableStateOf("")
         private set
     var searchType by mutableStateOf(SearchType.All)
@@ -29,6 +33,30 @@ class SearchResultViewModel(private val searchRepository: SearchRepository) : Vi
     private val hasMore = mutableMapOf<SearchType, Boolean>()
     private val versions = mutableMapOf<SearchType, Int>()
     private val jobs = mutableMapOf<SearchType, Job>()
+
+    init {
+        viewModelScope.launch {
+            localUserBlocks.blocked.collect {
+                results.keys.toList().forEach { type -> results[type] = result(type).filtered() }
+            }
+        }
+    }
+
+    private fun SearchResult.filtered() = copy(
+        videos = videos.filterNot { localUserBlocks.isBlocked(it.upId) },
+        biliUsers = biliUsers.filterNot { localUserBlocks.isBlocked(it.mid) },
+        liveRooms = liveRooms.filterNot { localUserBlocks.isBlocked(it.uid) },
+        articles = articles.filterNot { localUserBlocks.isBlocked(it.authorId) },
+        aggregateItems = aggregateItems.filterNot { item ->
+            when (item) {
+                is SearchTypeResult.Video -> localUserBlocks.isBlocked(item.upId)
+                is SearchTypeResult.User -> localUserBlocks.isBlocked(item.mid)
+                is SearchTypeResult.LiveRoom -> localUserBlocks.isBlocked(item.uid)
+                is SearchTypeResult.Article -> localUserBlocks.isBlocked(item.authorId)
+                else -> false
+            }
+        }
+    )
 
     val allSearchResult get() = result(SearchType.All)
     val videoSearchResult get() = result(SearchType.Video)
@@ -107,7 +135,7 @@ class SearchResultViewModel(private val searchRepository: SearchRepository) : Vi
                     searchRepository.searchType(query, type, tid, order, duration, page, api, proxy)
                 }
                 if ((versions[type] ?: 0) != version || keyword != query) return@launch
-                results[type] = result(type).append(response)
+                results[type] = result(type).append(response).filtered()
                 pages[type] = response.page
                 val count = when (type) {
                     SearchType.All, SearchType.Video -> response.videos.size

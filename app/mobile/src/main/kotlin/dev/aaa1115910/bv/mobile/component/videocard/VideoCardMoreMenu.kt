@@ -44,6 +44,7 @@ import dev.aaa1115910.bv.entity.carddata.VideoCardData
 import dev.aaa1115910.bv.entity.carddata.VideoCardFeedOption
 import dev.aaa1115910.bv.mobile.activities.UserSpaceActivity
 import dev.aaa1115910.bv.mobile.settings.MobilePrefs
+import dev.aaa1115910.bv.repository.LocalUserBlockRepository
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.toast
 import kotlinx.coroutines.Dispatchers
@@ -60,7 +61,8 @@ fun VideoCardMoreMenu(
     toViewRepository: ToViewRepository = koinInject(),
     likeRepository: LikeRepository = koinInject(),
     userRepository: UserRepository = koinInject(),
-    recommendVideoRepository: RecommendVideoRepository = koinInject()
+    recommendVideoRepository: RecommendVideoRepository = koinInject(),
+    localUserBlocks: LocalUserBlockRepository = koinInject()
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -178,6 +180,15 @@ fun VideoCardMoreMenu(
                         }
                     }
                 }
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("本地屏蔽：${data.upName}") },
+            leadingIcon = { Icon(Icons.Rounded.VisibilityOff, null) },
+            enabled = data.upId > 0L,
+            onClick = {
+                expanded = false
+                runAction("已本地屏蔽，可在设置中解除") { localUserBlocks.add(data.upId).getOrThrow() }
             }
         )
         DropdownMenuItem(

@@ -1,5 +1,6 @@
 package dev.aaa1115910.bv.tv.activities.video
 
+import dev.aaa1115910.bv.player.PlayerMediaSession
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -199,6 +200,7 @@ class VideoPlayerV3Activity : TvComponentActivity() {
     }
 
     private val playerViewModel: VideoPlayerV3ViewModel by viewModel()
+    private var systemMediaSession: PlayerMediaSession? = null
     private val videoDetailViewModel: VideoDetailViewModel by viewModel()
 
     private fun resetSessionPlaySpeedToDefault() {
@@ -219,6 +221,7 @@ class VideoPlayerV3Activity : TvComponentActivity() {
         initVideoPlayer(isLive = isLive)
         //initDanmakuPlayer()
         getParamsFromIntent()
+        systemMediaSession = PlayerMediaSession(this, lifecycleScope, playerViewModel)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
             BVTheme(
@@ -230,6 +233,8 @@ class VideoPlayerV3Activity : TvComponentActivity() {
     }
 
     override fun onDestroy() {
+        systemMediaSession?.close()
+        systemMediaSession = null
         playerViewModel.saveSubtitleSmartDisplayPreferenceIfNeeded()
         super.onDestroy()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

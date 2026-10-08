@@ -298,6 +298,20 @@ fun OfflineCacheScreen(
                         Text(if (allDisplayedSelected) "取消全选" else "全选", maxLines = 1)
                     }
                 }
+                OutlinedButton(
+                    modifier = Modifier.height(36.dp),
+                    enabled = completedCards.any { it.key in selectedKeys },
+                    onClick = {
+                        val selected = completedCards.filter { it.key in selectedKeys }
+                        scope.launch {
+                            var failures = 0
+                            for (card in selected) {
+                                if (offlineCacheService.updateSkipMetadata(card.aid, card.cid).isFailure) failures++
+                            }
+                            (if (failures == 0) "已更新 ${selected.size} 项跳过片段" else "$failures 项更新失败，原片段已保留").toast(context)
+                        }
+                    }
+                ) { Text("更新片段") }
                 Button(
                     modifier = Modifier.height(36.dp),
                     enabled = selectedKeys.isNotEmpty(),
@@ -413,7 +427,11 @@ fun OfflineCacheScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
-                    items(completedCards, key = { it.key }) { card ->
+                    completedCards.groupBy { it.entry?.groupKey ?: "video:${it.aid}" }.forEach { (groupKey, groupCards) ->
+                        item(key = "group-$groupKey", span = { GridItemSpan(maxLineSpan) }) {
+                            Text("${groupCards.first().entry?.groupTitle ?: groupCards.first().seriesTitle} · ${groupCards.size} 项", style = MaterialTheme.typography.titleMedium)
+                        }
+                    items(groupCards, key = { it.key }) { card ->
                         OfflineCacheCard(
                             modifier = if (activeCards.isEmpty() && card.key == completedCards.first().key) {
                                 Modifier.focusRequester(initialFocusRequester)
@@ -423,6 +441,7 @@ fun OfflineCacheScreen(
                             manageMode = manageMode,
                             onClick = { handleCardClick(card) }
                         )
+                    }
                     }
                 }
             }

@@ -65,6 +65,7 @@ class MpvMediaPlayer(
     private var pendingSeekCallbackPosition: Long? = null
 
     private var _isPlaying = false
+    private var pausedForCache = false
     private var _isSeekable = true
     private var _currentPosition = 0L
     private var _duration = 0L
@@ -264,6 +265,9 @@ class MpvMediaPlayer(
 
     override val isPlaying: Boolean
         get() = _isPlaying
+
+    override val isBuffering: Boolean
+        get() = _isPlaying && pausedForCache
 
     override val isSeekable: Boolean
         get() = _isSeekable
@@ -809,6 +813,7 @@ class MpvMediaPlayer(
         mediaLoading = true
         mediaLoaded = false
         _isPlaying = false
+        pausedForCache = false
         cacheBufferingPercent = 0
         demuxerCacheAheadMs = 0L
         _currentPosition = 0L
@@ -1038,6 +1043,7 @@ class MpvMediaPlayer(
         when (property) {
             "pause" -> updatePlayingState(!value && mediaLoaded)
             "paused-for-cache" -> {
+                pausedForCache = value
                 if (value) {
                     dispatchBuffering()
                 } else if (_isPlaying) {

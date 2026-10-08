@@ -1,5 +1,11 @@
 package dev.aaa1115910.bv.offline
 
+import android.util.AtomicFile
+import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
+import dev.aaa1115910.biliapi.entity.video.VideoDetail
+import dev.aaa1115910.biliapi.http.entity.video.ClipInfo
+import dev.aaa1115910.biliapi.http.SponsorBlockHttpApi
+import dev.aaa1115910.biliapi.repositories.VideoDetailRepository
 import android.net.Uri
 import android.os.Build
 import androidx.compose.runtime.mutableStateListOf
@@ -16,6 +22,7 @@ import dev.aaa1115910.bv.BVApp
 import dev.aaa1115910.bv.player.entity.Audio
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.VideoCodec
+import dev.aaa1115910.bv.settings.PlayerSettingsProvider
 import dev.aaa1115910.bv.util.Prefs
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
@@ -86,8 +93,26 @@ data class OfflineVideoCacheTaskState(
 }
 
 @Serializable
+data class OfflineSkipMetadata(
+    val sponsorSegments: List<SponsorSegment> = emptyList(),
+    val clipInfoList: List<ClipInfo> = emptyList()
+)
+
+@Serializable
+data class OfflineSeasonMetadata(
+    val id: Long,
+    val title: String,
+    val cover: String = "",
+    val mid: Long = 0L
+)
+
+fun VideoDetail.toOfflineSeasonMetadata(): OfflineSeasonMetadata? = ugcSeason?.let {
+    OfflineSeasonMetadata(it.id.toLong(), it.title, it.cover, author.mid)
+}
+
+@Serializable
 data class OfflineVideoCacheEntry(
-    val version: Int = 1,
+    val version: Int = 2,
     val aid: Long,
     val cid: Long,
     val bvid: String,
@@ -114,8 +139,13 @@ data class OfflineVideoCacheEntry(
     val upFace: String = "",
     val danmakuCount: Int = 0,
     val coverFileName: String = "",
-    val upFaceFileName: String = ""
+    val upFaceFileName: String = "",
+    val skipMetadata: OfflineSkipMetadata = OfflineSkipMetadata(),
+    val season: OfflineSeasonMetadata? = null,
+    val epId: Int? = null
 ) {
+    val groupKey: String get() = season?.let { "ugc:${it.mid}:${it.id}" } ?: "video:$aid"
+    val groupTitle: String get() = season?.title?.takeIf { it.isNotBlank() } ?: title
     val displayTitle: String
         get() = partTitle.ifBlank { title }
 }
@@ -139,7 +169,10 @@ data class OfflineVideoCacheRequest(
     val videoUrls: List<String>,
     val audioUrls: List<String>,
     val upFace: String = "",
-    val danmakuCount: Int = 0
+    val danmakuCount: Int = 0,
+    val skipMetadata: OfflineSkipMetadata = OfflineSkipMetadata(),
+    val season: OfflineSeasonMetadata? = null,
+    val epId: Int? = null
 )
 
 data class OfflineVideoCacheTarget(
@@ -154,7 +187,9 @@ data class OfflineVideoCacheTarget(
     val width: Int,
     val height: Int,
     val upFace: String = "",
-    val danmakuCount: Int = 0
+    val danmakuCount: Int = 0,
+    val season: OfflineSeasonMetadata? = null,
+    val epId: Int? = null
 )
 
 data class OfflineVideoCacheTaskRequest(
@@ -208,7 +243,8 @@ private data class OfflineDanmakuItem(
 @Single
 class OfflineVideoCacheService(
     private val authRepository: AuthRepository,
-    private val videoPlayRepository: VideoPlayRepository
+    private val videoPlayRepository: VideoPlayRepository,
+    private val videoDetailRepository: VideoDetailRepository
 ) {
     private val logger = KotlinLogging.logger { }
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -295,7 +331,10 @@ class OfflineVideoCacheService(
             latestTaskStates.remove(key)
             pausedRequests.remove(key)
             if (resetFailedCache && shouldResetFailedCache(target)) {
-                entryDir(target.aid, target.cid).deleteRecursively()
+                // Keep skip/group metadata while discarding failed media files.
+                entryDir(target.aid, target.cid).listFiles()?.filterNot {
+                    it.name == ENTRY_FILE_NAME || it.name.startsWith("$ENTRY_FILE_NAME.")
+                }?.forEach { it.deleteRecursively() }
             }
             queue.add(request)
             updateState(
@@ -558,6 +597,10 @@ class OfflineVideoCacheService(
             .filter { it.aid == aid && it.completed && cacheFilesReady(it) }
             .sortedByDescending { it.updatedAt }
 
+    fun getCompletedGroupEntries(entry: OfflineVideoCacheEntry): List<OfflineVideoCacheEntry> =
+        getAllCompletedEntries().filter { it.groupKey == entry.groupKey }
+            .sortedWith(compareBy<OfflineVideoCacheEntry> { it.createdAt }.thenBy { it.cid })
+
     fun getAllCompletedEntries(): List<OfflineVideoCacheEntry> =
         scanEntries()
             .filter { it.completed && cacheFilesReady(it) }
@@ -607,6 +650,7 @@ class OfflineVideoCacheService(
             cid = target.cid,
             qn = taskRequest.preferredQuality.code,
             tryLook1080P = taskRequest.tryLook1080P,
+            epid = target.epId,
         ).requireOfflineCacheStreams().also { data ->
             logger.info {
                 "Resolved offline cache play data: [aid=${target.aid}, cid=${target.cid}, qualities=${data.dashVideos.map { it.quality }.distinct()}, audios=${data.dashAudios.map { it.codecId }.distinct()}, dolby=${data.dolby?.codecId}, flac=${data.flac?.codecId}]"
@@ -631,6 +675,26 @@ class OfflineVideoCacheService(
         val audioItem = playData.selectAudioForOfflineCache(taskRequest.preferredAudio)
             ?: throw IllegalStateException("未找到可缓存的音频流")
 
+        val existing = readEntry(entryDir(target.aid, target.cid))
+        val sponsors = if (target.epId == null && PlayerSettingsProvider.current.enableSponsorBlock) {
+            SponsorBlockHttpApi.updateBaseUrl(PlayerSettingsProvider.current.sponsorBlockApiServer)
+            SponsorBlockHttpApi.getSkipSegments(target.bvid.ifBlank { AvBvConverter.av2bv(target.aid) }, target.cid, listOf("sponsor"))
+                .getOrElse { error ->
+                    if (error is CancellationException) throw error
+                    logger.warn(error) { "Keep cached SponsorBlock metadata after refresh failure" }
+                    existing?.skipMetadata?.sponsorSegments.orEmpty()
+                }
+        } else existing?.skipMetadata?.sponsorSegments.orEmpty()
+        val season = target.season ?: existing?.season ?: if (target.epId == null) {
+            try {
+                videoDetailRepository.getVideoDetail(target.aid, preferApiType = PlayerSettingsProvider.current.apiType, withUserActions = false)
+                    .toOfflineSeasonMetadata()
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                null
+            }
+        } else null
+
         return OfflineVideoCacheRequest(
             aid = target.aid,
             cid = target.cid,
@@ -653,7 +717,10 @@ class OfflineVideoCacheService(
             videoUrls = (listOf(videoItem.baseUrl) + videoItem.backUrl).toOfflineDownloadUrls(),
             audioUrls = (listOf(audioItem.baseUrl) + audioItem.backUrl).toOfflineDownloadUrls(),
             upFace = target.upFace,
-            danmakuCount = target.danmakuCount
+            danmakuCount = target.danmakuCount,
+            skipMetadata = OfflineSkipMetadata(sponsors, playData.clipInfoList),
+            season = season,
+            epId = target.epId
         )
     }
 
@@ -1181,16 +1248,61 @@ class OfflineVideoCacheService(
             upFace = request.upFace,
             danmakuCount = request.danmakuCount,
             coverFileName = COVER_FILE_NAME.takeIf { File(dir, COVER_FILE_NAME).length() > 0L }.orEmpty(),
-            upFaceFileName = UP_FACE_FILE_NAME.takeIf { File(dir, UP_FACE_FILE_NAME).length() > 0L }.orEmpty()
+            upFaceFileName = UP_FACE_FILE_NAME.takeIf { File(dir, UP_FACE_FILE_NAME).length() > 0L }.orEmpty(),
+            skipMetadata = request.skipMetadata,
+            season = request.season,
+            epId = request.epId
         )
-        File(dir, ENTRY_FILE_NAME).writeText(json.encodeToString(entry))
+        persistEntry(dir, entry)
+    }
+
+    @Synchronized
+    private fun persistEntry(dir: File, entry: OfflineVideoCacheEntry) {
+        val file = AtomicFile(File(dir, ENTRY_FILE_NAME))
+        val stream = file.startWrite()
+        try {
+            stream.write(json.encodeToString(entry).toByteArray(Charsets.UTF_8))
+            file.finishWrite(stream)
+        } catch (error: Throwable) {
+            file.failWrite(stream)
+            throw error
+        }
+    }
+
+    suspend fun updateSkipMetadata(aid: Long, cid: Long): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val entry = getCompletedEntry(aid, cid) ?: error("缓存不存在或不完整")
+            val newSponsorSegments: List<SponsorSegment>?
+            val newClips: List<ClipInfo>?
+            if (entry.epId == null) {
+                SponsorBlockHttpApi.updateBaseUrl(PlayerSettingsProvider.current.sponsorBlockApiServer)
+                newSponsorSegments = SponsorBlockHttpApi.getSkipSegments(entry.bvid, cid, listOf("sponsor")).getOrThrow()
+                newClips = null
+            } else {
+                newSponsorSegments = null
+                newClips = videoPlayRepository.getDownloadPlayData(aid, entry.bvid, cid, entry.quality, epid = entry.epId).clipInfoList
+            }
+            synchronized(this@OfflineVideoCacheService) {
+                val latest = getCompletedEntry(aid, cid) ?: error("缓存已被移除")
+                persistEntry(entryDir(aid, cid), latest.copy(
+                    skipMetadata = latest.skipMetadata.copy(
+                        sponsorSegments = newSponsorSegments ?: latest.skipMetadata.sponsorSegments,
+                        clipInfoList = newClips ?: latest.skipMetadata.clipInfoList
+                    )
+                ))
+            }
+            refreshEntries()
+            Result.success("已更新跳过片段")
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            Result.failure(error)
+        }
     }
 
     private fun readEntry(dir: File): OfflineVideoCacheEntry? {
         val entryFile = File(dir, ENTRY_FILE_NAME)
-        if (!entryFile.exists()) return null
         return runCatching {
-            json.decodeFromString<OfflineVideoCacheEntry>(entryFile.readText())
+            json.decodeFromString<OfflineVideoCacheEntry>(AtomicFile(entryFile).openRead().bufferedReader().use { it.readText() })
         }.getOrNull()
     }
 
@@ -1307,6 +1419,7 @@ class OfflineVideoCacheService(
             backUrl = emptyList()
         )
         return PlayData(
+            clipInfoList = skipMetadata.clipInfoList,
             dashVideos = listOf(video),
             dashAudios = listOf(audio),
             codec = mapOf(quality to listOf(videoCodec)),

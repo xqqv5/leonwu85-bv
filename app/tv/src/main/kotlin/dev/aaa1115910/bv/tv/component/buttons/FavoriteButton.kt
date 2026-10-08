@@ -185,6 +185,7 @@ private fun FavoriteDialog(
                                 if (it.hasFocus) touch()
                             },
                             selected = selected,
+                            enabled = selected || userFavoriteFolder.canSelect,
                             onClick = {
                                 if (selectedFavoriteFolderIds.contains(userFavoriteFolder.id)) {
                                     selectedFavoriteFolderIds.remove(userFavoriteFolder.id)
@@ -207,7 +208,7 @@ private fun FavoriteDialog(
                                 }
                             }
                         ) {
-                            Text(text = userFavoriteFolder.title)
+                            Text(text = userFavoriteFolder.title + if (userFavoriteFolder.isFull) " · 已满" else "")
                         }
                     }
                 }

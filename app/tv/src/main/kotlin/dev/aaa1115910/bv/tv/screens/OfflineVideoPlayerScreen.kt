@@ -114,8 +114,8 @@ fun OfflineVideoPlayerScreen(
             showNextVideoBtn = playerViewModel.availableVideoList.size > 1,
             defaultStartPosition = DefaultStartPosition.Beginning,
             enableStartPositionSwitch = false,
-            clipInfoList = emptyList(),
-            skipPgcIntroOutro = false,
+            clipInfoList = playerViewModel.clipInfoList,
+            skipPgcIntroOutro = Prefs.skipPgcIntroOutro,
             isLive = false
         ),
         LocalVideoPlayerDanmakuMasksData provides VideoPlayerDanmakuMasksData(),
@@ -198,7 +198,17 @@ fun OfflineVideoPlayerScreen(
                 },
                 shortcutKeyBindings = Prefs.playerShortcutKeyBindings,
                 useTripleLikeOnLongPress = false,
-                enableSponsorBlock = false,
+                enableSponsorBlock = playerViewModel.enableSponsorBlock,
+                sponsorBlockSkipMode = playerViewModel.sponsorBlockSkipMode,
+                sponsorSegments = playerViewModel.sponsorSegments,
+                showSponsorBlockTip = playerViewModel.showSponsorBlockTip,
+                currentSponsorSegment = playerViewModel.currentSponsorSegment,
+                onShowSponsorBlockTip = { segment ->
+                    playerViewModel.currentSponsorSegment = segment
+                    playerViewModel.showSponsorBlockTip = true
+                },
+                onSkipSponsorSegment = playerViewModel::skipSponsorSegment,
+                onDismissSponsorBlockTip = playerViewModel::dismissSponsorBlockTip,
                 isLive = false
             )
         }

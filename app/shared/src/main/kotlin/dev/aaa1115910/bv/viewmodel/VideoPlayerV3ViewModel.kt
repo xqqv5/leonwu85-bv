@@ -15,6 +15,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import dev.aaa1115910.bv.player.mediaPlaylistNeighbor
+import dev.aaa1115910.bv.player.boundedMediaSeek
+import dev.aaa1115910.bv.repository.LocalUserBlockRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kuaishou.akdanmaku.DanmakuConfig
@@ -364,6 +367,7 @@ class VideoPlayerV3ViewModel(
     private val liveRepository: LiveRepository,
     private val offlineVideoCacheService: OfflineVideoCacheService,
     private val authRepository: AuthRepository,
+    private val localUserBlocks: LocalUserBlockRepository,
 ) : ViewModel() {
     private val logger = KotlinLogging.logger { }
     private val settings get() = PlayerSettingsProvider.current
@@ -546,7 +550,9 @@ class VideoPlayerV3ViewModel(
     var availableSubtitle = mutableStateListOf<Subtitle>()
     var availableAudio = mutableStateListOf<Audio>()
     val availableVideoList get() = videoInfoRepository.videoList
-    val relatedVideos get() =  videoInfoRepository.relatedVideos
+    private var blockedUids by mutableStateOf(localUserBlocks.blocked.value)
+    init { viewModelScope.launch { localUserBlocks.blocked.collect { blockedUids = it } } }
+    val relatedVideos get() = videoInfoRepository.relatedVideos.filterNot { it.upId in blockedUids }
     val isInteractivePlayback get() = videoInfoRepository.interactivePlaybackContext != null
     val interactiveOptions get() = availableVideoList.filterIsInstance<VideoListInteractiveNode>()
     var showInteractiveOptionDialog by mutableStateOf(false)
@@ -559,7 +565,7 @@ class VideoPlayerV3ViewModel(
 
     fun replaceRelatedVideos(videos: List<VideoCardData>) {
         videoInfoRepository.relatedVideos.clear()
-        videoInfoRepository.relatedVideos.addAll(videos)
+        videoInfoRepository.relatedVideos.addAll(videos.filterNot { localUserBlocks.isBlocked(it.upId) })
         if (videos.isEmpty()) showRelatedVideos = false
     }
 
@@ -804,6 +810,7 @@ class VideoPlayerV3ViewModel(
     // SponsorBlock 相关状态
     var enableSponsorBlock by mutableStateOf(settings.enableSponsorBlock)
     var sponsorBlockSkipMode by mutableStateOf(settings.sponsorBlockSkipMode)
+    private var sponsorSegmentsJob: Job? = null
     var sponsorSegments by mutableStateOf<List<SponsorSegment>>(emptyList())
     var showSponsorBlockTip by mutableStateOf(false)
     var currentSponsorSegment by mutableStateOf<SponsorSegment?>(null)
@@ -1367,6 +1374,10 @@ class VideoPlayerV3ViewModel(
         val manualPlaybackRequestedBeforeInitialLoad =
             vodPlaybackSessionToken == 0L && manualVodPlaybackRequested
         val playbackSessionToken = beginVodPlaybackSession()
+        sponsorSegmentsJob?.cancel()
+        sponsorSegments = emptyList()
+        currentSponsorSegment = null
+        showSponsorBlockTip = false
         val historyPositionMs = lastPlayed
             .takeIf {
                 !continuePlayNext &&
@@ -1535,7 +1546,8 @@ class VideoPlayerV3ViewModel(
                 width = currentVideoWidth,
                 height = currentVideoHeight,
                 upFace = upFace,
-                danmakuCount = danmaku
+                danmakuCount = danmaku,
+                epId = epid.takeIf { fromSeason && it > 0 }
             )
         } ?: return Result.failure(IllegalStateException("视频地址尚未加载完成"))
 
@@ -1559,7 +1571,8 @@ class VideoPlayerV3ViewModel(
                 width = page.dimension.width,
                 height = page.dimension.height,
                 upFace = upFace,
-                danmakuCount = danmaku
+                danmakuCount = danmaku,
+                epId = epid.takeIf { fromSeason && it > 0 }
             )
         }
         return cacheVideoTarget(target, preferredQuality)
@@ -1667,6 +1680,9 @@ class VideoPlayerV3ViewModel(
     fun completedOfflineCacheEntry(aid: Long, cid: Long): OfflineVideoCacheEntry? =
         offlineVideoCacheService.getCompletedEntry(aid, cid)
 
+    fun completedOfflineCacheGroupEntries(entry: OfflineVideoCacheEntry): List<OfflineVideoCacheEntry> =
+        offlineVideoCacheService.getCompletedGroupEntries(entry)
+
     fun completedOfflineCacheEntries(aid: Long): List<OfflineVideoCacheEntry> =
         offlineVideoCacheService.getCompletedEntries(aid)
 
@@ -1676,7 +1692,7 @@ class VideoPlayerV3ViewModel(
             ?: return Result.failure(IllegalStateException("离线缓存文件不存在或不完整"))
 
         videoInfoRepository.replacePlaybackContext(
-            videoList = entries.mapIndexed { index, entry ->
+            videoList = offlineVideoCacheService.getCompletedGroupEntries(currentEntry).mapIndexed { index, entry ->
                 VideoListUgcEpisode(
                     aid = entry.aid,
                     cid = entry.cid,
@@ -2653,7 +2669,10 @@ class VideoPlayerV3ViewModel(
             videoPlayer?.setOfflinePlaybackMode(true)
             needPay = false
             this@VideoPlayerV3ViewModel.playData = playData
-            clipInfoList = emptyList()
+            clipInfoList = entry.skipMetadata.clipInfoList
+            sponsorSegments = entry.skipMetadata.sponsorSegments
+            currentSponsorSegment = null
+            showSponsorBlockTip = false
             currentQuality = resolution
             currentVideoCodec = videoCodec
             currentAudio = audio
@@ -4322,33 +4341,20 @@ class VideoPlayerV3ViewModel(
      * 加载 SponsorBlock 片段数据
      */
     fun loadSponsorSegments(bvid: String, cid: Long) {
-        if (!enableSponsorBlock) {
-            logger.fInfo { "SponsorBlock is disabled, skip loading segments" }
-            return
-        }
-
+        sponsorSegmentsJob?.cancel()
+        if (!enableSponsorBlock || currentPlaybackOffline) return
+        val sessionToken = vodPlaybackSessionToken
         SponsorBlockHttpApi.updateBaseUrl(settings.sponsorBlockApiServer)
-
-        viewModelScope.launch(Dispatchers.IO) {
-            addLogs("加载 SponsorBlock 片段")
-            logger.fInfo { "Loading SponsorBlock segments for $bvid/$cid" }
-
-            SponsorBlockHttpApi.getSkipSegments(
-                bvid = bvid,
-                cid = cid,
-                categories = listOf("sponsor")  // 暂时只获取赞助广告类别
-            ).fold(
-                onSuccess = { segments ->
-                    sponsorSegments = segments
-                    addLogs("加载到 ${segments.size} 个片段")
-                    logger.fInfo { "Loaded ${segments.size} sponsor segments" }
-                },
-                onFailure = { error ->
-                    sponsorSegments = emptyList()
-                    addLogs("加载片段失败: ${error.message}")
-                    logger.fWarn { "Failed to load sponsor segments: ${error.message}" }
-                }
-            )
+        sponsorSegmentsJob = viewModelScope.launch(Dispatchers.IO) {
+            val result = SponsorBlockHttpApi.getSkipSegments(bvid, cid, listOf("sponsor"))
+            withContext(Dispatchers.Main.immediate) {
+                if (!isVodPlaybackSessionActive(sessionToken) || currentCid != cid || currentPlaybackOffline) return@withContext
+                result.onSuccess { sponsorSegments = it }
+                    .onFailure { error ->
+                        if (error is CancellationException) throw error
+                        addLogs("加载片段失败: ${error.message}")
+                    }
+            }
         }
     }
 
@@ -5196,6 +5202,57 @@ class VideoPlayerV3ViewModel(
         }.onFailure {
             logger.fWarn { "Load video shot failed: ${it.stackTraceToString()}" }
         }
+    }
+
+    fun setExternalPlaybackPlaying(playing: Boolean) {
+        val player = videoPlayer ?: return
+        if (playing) {
+            if (!isLive && pendingVodPlaybackSource != null) {
+                requestManualVodPlayback()
+                return
+            }
+            if (!isLive && playData == null) {
+                manualVodPlaybackRequested = true
+                return
+            }
+            player.start()
+            if (isLive) resumeLiveDanmakuIfNeeded() else danmakuPlayer?.start()
+        } else {
+            player.pause()
+            if (isLive) stopLiveDanmaku() else danmakuPlayer?.pause()
+        }
+    }
+
+    fun seekFromExternalControls(positionMs: Long) {
+        val player = videoPlayer ?: return
+        if (isLive || !player.isSeekable) return
+        val position = boundedMediaSeek(positionMs, player.duration)
+        val wasPlaying = player.isPlaying
+        player.seekTo(position)
+        reloadDanmakuAfterSeek(position, wasPlaying)
+    }
+
+    fun seekByExternalControls(offsetMs: Long) {
+        val player = videoPlayer ?: return
+        seekFromExternalControls(player.currentPosition + offsetMs)
+    }
+
+    fun hasMediaPlaylistNeighbor(offset: Int): Boolean = !isLive && !isInteractivePlayback &&
+        availableVideoList.mediaPlaylistNeighbor(currentAid, currentCid, offset) != null
+
+    fun playMediaPlaylistOffset(offset: Int) {
+        if (!hasMediaPlaylistNeighbor(offset)) return
+        val item = availableVideoList.mediaPlaylistNeighbor(currentAid, currentCid, offset) ?: return
+        val cid = item.cid ?: return
+        if (currentPlaybackOffline) {
+            playOfflinePlaylistItem(item.aid, cid)
+            return
+        }
+        if (item.aid != currentAid) title = item.title
+        partTitle = item.partTitle.ifBlank { item.title }
+        item.cover?.takeIf { it.isNotBlank() }?.let { cover = it }
+        loadPlayUrl(avid = item.aid, cid = cid, epid = item.epid, seasonId = item.seasonId,
+            continuePlayNext = true, forceStartPlayback = true)
     }
 
     fun playNextVideo() {

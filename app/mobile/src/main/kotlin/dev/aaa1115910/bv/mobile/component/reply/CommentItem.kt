@@ -403,6 +403,14 @@ fun CommentItem(
                 )
                 CommentSheetItem(
                     icon = Icons.Rounded.Block,
+                    text = "本地屏蔽：${currentComment.member.name}",
+                    onClick = {
+                        showMoreSheet = false
+                        runUnitAction("已本地屏蔽，可在设置中解除") { commentViewModel.blockCommentUserLocally(currentComment) }
+                    }
+                )
+                CommentSheetItem(
+                    icon = Icons.Rounded.Block,
                     text = "加入黑名单：${currentComment.member.name}",
                     color = MaterialTheme.colorScheme.error,
                     onClick = {

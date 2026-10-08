@@ -139,6 +139,7 @@ import dev.aaa1115910.bv.entity.proxy.ProxyArea
 import dev.aaa1115910.bv.offline.OfflineCacheQualitySelector
 import dev.aaa1115910.bv.offline.OfflineVideoCacheService
 import dev.aaa1115910.bv.offline.OfflineVideoCacheStatus
+import dev.aaa1115910.bv.offline.toOfflineSeasonMetadata
 import dev.aaa1115910.bv.offline.OfflineVideoCacheTarget
 import dev.aaa1115910.bv.offline.OfflineVideoCacheTaskState
 import dev.aaa1115910.bv.player.entity.Resolution
@@ -2058,6 +2059,7 @@ private fun buildTvOfflineCacheItems(
                 if (episode.pages.size > 1) {
                     episode.pages.map { page ->
                         val target = OfflineVideoCacheTarget(
+                            season = videoDetail.toOfflineSeasonMetadata(),
                             aid = episode.aid,
                             bvid = episode.bvid,
                             cid = page.cid,
@@ -2086,6 +2088,7 @@ private fun buildTvOfflineCacheItems(
                     val page = episode.pages.firstOrNull()
                     val targetCid = page?.cid ?: episode.cid
                     val target = OfflineVideoCacheTarget(
+                        season = videoDetail.toOfflineSeasonMetadata(),
                         aid = episode.aid,
                         bvid = episode.bvid,
                         cid = targetCid,
@@ -2121,6 +2124,7 @@ private fun buildTvOfflineCacheItems(
 
     return videoDetail.pages.map { page ->
         val target = OfflineVideoCacheTarget(
+            season = videoDetail.toOfflineSeasonMetadata(),
             aid = videoDetail.aid,
             bvid = videoDetail.bvid,
             cid = page.cid,
