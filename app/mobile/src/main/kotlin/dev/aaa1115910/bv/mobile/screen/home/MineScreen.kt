@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,6 +54,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -106,6 +109,7 @@ fun MineScreen(
     userViewModel: UserViewModel = koinViewModel(),
     userSwitchViewModel: UserSwitchViewModel = koinViewModel(),
     favoriteViewModel: FavoriteViewModel = koinViewModel(),
+    showBackButton: Boolean = true,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -194,7 +198,9 @@ fun MineScreen(
 
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        contentWindowInsets = if (showBackButton) ScaffoldDefaults.contentWindowInsets
+            else ScaffoldDefaults.contentWindowInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -216,6 +222,7 @@ fun MineScreen(
             ) {
                 item {
                     MineHeaderActions(
+                        showBackButton = showBackButton,
                         onBack = onBack,
                         onRefresh = ::refreshMine,
                         onAddUser = ::openLogin,
@@ -293,6 +300,7 @@ fun MineScreen(
 
 @Composable
 private fun MineHeaderActions(
+    showBackButton: Boolean,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     onAddUser: () -> Unit,
@@ -302,11 +310,13 @@ private fun MineHeaderActions(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "返回"
-            )
+        if (showBackButton) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "返回"
+                )
+            }
         }
         Text(
             text = "我的",

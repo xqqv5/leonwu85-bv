@@ -15,7 +15,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,7 +29,9 @@ import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FiberNew
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.MarkChatUnread
 import androidx.compose.material.icons.rounded.Person
@@ -35,11 +39,13 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuite
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
@@ -53,6 +59,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -92,11 +99,13 @@ import dev.aaa1115910.biliapi.entity.Picture
 import dev.aaa1115910.biliapi.repositories.MessageRepository
 import dev.aaa1115910.biliapi.repositories.UserRepository as BiliUserRepository
 import dev.aaa1115910.bv.mobile.activities.InboxActivity
+import dev.aaa1115910.bv.mobile.activities.LoginActivity
 import dev.aaa1115910.bv.mobile.activities.SettingsActivity
 import dev.aaa1115910.bv.mobile.component.ImagePreviewerActions
 import dev.aaa1115910.bv.component.rememberVlcUpgradePrompt
 import dev.aaa1115910.bv.entity.PlayerType
 import dev.aaa1115910.bv.mobile.component.LibVLCDownloaderDialog
+import dev.aaa1115910.bv.mobile.settings.MobileBottomNavItem
 import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.player.impl.vlc.VlcNativeLibs
 import dev.aaa1115910.bv.mobile.component.update.MobileAutoUpdateDialog
@@ -142,6 +151,22 @@ fun MobileMainScreen(
 
     val navSuiteType =
         NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(currentWindowAdaptiveInfo())
+    val bottomNavigationItems by MobilePrefs.bottomNavigationItemsFlow.collectAsState(
+        initial = MobilePrefs.bottomNavigationItems
+    )
+    val bottomNavItems = remember(bottomNavigationItems) {
+        bottomNavigationItems.map(MobileMainScreenNav::fromBottomNavItem)
+    }
+    val mineInBottomBar = navSuiteType == NavigationSuiteType.NavigationBar &&
+        MobileMainScreenNav.Mine in bottomNavItems
+    val onOpenMineShortcut: (() -> Unit)? = if (
+        navSuiteType == NavigationSuiteType.NavigationBar &&
+        MobileMainScreenNav.Home !in bottomNavItems && MobileMainScreenNav.Mine !in bottomNavItems
+    ) {
+        { state.navigate(MobileMainScreenNav.Mine) }
+    } else {
+        null
+    }
 
     val pictures = remember { mutableStateListOf<Picture>() }
     var savingPreviewImage by remember { mutableStateOf(false) }
@@ -218,6 +243,16 @@ fun MobileMainScreen(
         }
     }
 
+    LaunchedEffect(bottomNavItems, navSuiteType) {
+        val configurableNavItems = MobileBottomNavItem.defaultItems
+            .map(MobileMainScreenNav::fromBottomNavItem)
+        if (navSuiteType == NavigationSuiteType.NavigationBar &&
+            state.currentNavItem in configurableNavItems && state.currentNavItem !in bottomNavItems
+        ) {
+            state.navigate(bottomNavItems.first())
+        }
+    }
+
     DisposableEffect(lifecycleOwner, userViewModel.isLogin) {
         var leaveFromThisPage = false
         val observer = LifecycleEventObserver { _, event ->
@@ -253,14 +288,15 @@ fun MobileMainScreen(
         MobileMainScreenNav.Home,
         MobileMainScreenNav.Search,
         MobileMainScreenNav.Dynamic,
+        MobileMainScreenNav.History,
+        MobileMainScreenNav.Favorite,
         MobileMainScreenNav.Mine,
         MobileMainScreenNav.Setting
     ).map { it.name }
-    val horizontalNavOrder = listOf(
-        MobileMainScreenNav.Home,
-        MobileMainScreenNav.Dynamic,
-        MobileMainScreenNav.Setting
-    ).map { it.name }
+    val horizontalNavOrder = (
+        MobileBottomNavItem.defaultItems.map(MobileMainScreenNav::fromBottomNavItem) +
+            listOf(MobileMainScreenNav.Search, MobileMainScreenNav.Setting)
+        ).map { it.name }
 
     val compareNavIndex: (String?, String?) -> Boolean = { a, b ->
         if (navSuiteType == NavigationSuiteType.NavigationBar) {
@@ -361,6 +397,7 @@ fun MobileMainScreen(
                     dynamicGridState = state.dynamicGridState,
                     previewerState = previewerState,
                     onShowPreviewer = onShowPreviewer,
+                    onOpenMine = onOpenMineShortcut,
                     // dynamicViewModel = dynamicViewModel
                 )
             }
@@ -368,11 +405,42 @@ fun MobileMainScreen(
             composable(MobileMainScreenNav.Search.name) {
                 SearchScreen()
             }
+            composable(MobileMainScreenNav.History.name) {
+                if (userViewModel.isLogin) {
+                    HistoryScreen(
+                        windowSize = state.windowSizeClass,
+                        historyViewModel = koinViewModel(
+                            key = "history-${userSwitchViewModel.currentUser.id}"
+                        ),
+                        showBackButton = false,
+                        onOpenMine = onOpenMineShortcut,
+                        onBack = { state.navigate(bottomNavItems.first()) }
+                    )
+                } else {
+                    LoginRequiredContent(title = "历史", onOpenMine = onOpenMineShortcut)
+                }
+            }
+            composable(MobileMainScreenNav.Favorite.name) {
+                if (userViewModel.isLogin) {
+                    FavoriteScreen(
+                        windowSize = state.windowSizeClass,
+                        favoriteViewModel = koinViewModel(
+                            key = "favorite-${userSwitchViewModel.currentUser.id}"
+                        ),
+                        showBackButton = false,
+                        onOpenMine = onOpenMineShortcut,
+                        onBack = { state.navigate(bottomNavItems.first()) }
+                    )
+                } else {
+                    LoginRequiredContent(title = "收藏", onOpenMine = onOpenMineShortcut)
+                }
+            }
             composable(MobileMainScreenNav.Mine.name) {
                 MineScreen(
                     windowSize = state.windowSizeClass.widthSizeClass,
                     userViewModel = userViewModel,
                     userSwitchViewModel = userSwitchViewModel,
+                    showBackButton = !mineInBottomBar,
                     onBack = {
                         if (!state.navController.popBackStack()) {
                             state.navigate(MobileMainScreenNav.Home)
@@ -386,7 +454,7 @@ fun MobileMainScreen(
     Box(
         modifier = modifier,
     ) {
-        if (state.currentNavItem == MobileMainScreenNav.Mine) {
+        if (state.currentNavItem == MobileMainScreenNav.Mine && !mineInBottomBar) {
             navHostContent()
         } else {
             NavigationSuiteScaffoldLayout(
@@ -394,6 +462,7 @@ fun MobileMainScreen(
                     NavigationSuit(
                         mobileMainScreenState = state,
                         navigationSuiteType = navSuiteType,
+                        bottomNavItems = bottomNavItems,
                         avatar = userViewModel.face,
                         dynamicUnreadCount = dynamicUnreadCount,
                         onNavigate = { navItem ->
@@ -488,10 +557,34 @@ fun MobileMainScreen(
 }
 
 @Composable
+private fun LoginRequiredContent(title: String, onOpenMine: (() -> Unit)? = null) {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)
+    ) {
+        Text(
+            text = "请先登录后查看$title",
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Button(onClick = { context.startActivity(Intent(context, LoginActivity::class.java)) }) {
+            Text(text = "登录")
+        }
+        if (onOpenMine != null) {
+            TextButton(onClick = onOpenMine) {
+                Text(text = "我的与设置")
+            }
+        }
+    }
+}
+
+@Composable
 private fun NavigationSuit(
     modifier: Modifier = Modifier,
     mobileMainScreenState: MobileMainScreenState,
     navigationSuiteType: NavigationSuiteType,
+    bottomNavItems: List<MobileMainScreenNav>,
     avatar: String,
     dynamicUnreadCount: Int,
     onNavigate: (MobileMainScreenNav) -> Unit,
@@ -509,11 +602,7 @@ private fun NavigationSuit(
                         navigationBarContentColor = MaterialTheme.colorScheme.onSurface
                     )
                 ) {
-                    listOf(
-                        MobileMainScreenNav.Home,
-                        MobileMainScreenNav.Dynamic,
-                        MobileMainScreenNav.Setting,
-                    ).forEach { navItem ->
+                    bottomNavItems.forEach { navItem ->
                         item(
                             icon = {
                                 NavigationIcon(
@@ -678,7 +767,7 @@ data class MobileMainScreenState(
                 }
             }
 
-            MobileMainScreenNav.Search -> {
+            MobileMainScreenNav.Search, MobileMainScreenNav.History, MobileMainScreenNav.Favorite -> {
                 if (notCurrentNavItem) {
                     navigateToRoute()
                 }
@@ -795,10 +884,20 @@ enum class MobileMainScreenNav(val displayName: String, val icon: ImageVector) {
     Home("首页", Icons.Rounded.Home),
     Search("搜索", Icons.Rounded.Search),
     Dynamic("动态", Icons.Rounded.FiberNew),
+    History("历史", Icons.Rounded.History),
+    Favorite("收藏", Icons.Rounded.Favorite),
     Mine("我的", Icons.Rounded.Person),
     Setting("设置", Icons.Rounded.Settings), ;
 
     companion object {
         fun fromName(name: String) = entries.firstOrNull { it.name == name } ?: Home
+
+        fun fromBottomNavItem(item: MobileBottomNavItem): MobileMainScreenNav = when (item) {
+            MobileBottomNavItem.Home -> Home
+            MobileBottomNavItem.Dynamic -> Dynamic
+            MobileBottomNavItem.History -> History
+            MobileBottomNavItem.Favorite -> Favorite
+            MobileBottomNavItem.Mine -> Mine
+        }
     }
 }

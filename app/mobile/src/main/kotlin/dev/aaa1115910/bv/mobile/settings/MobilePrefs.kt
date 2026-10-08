@@ -156,6 +156,14 @@ object MobilePrefs {
     val customFontNameFlow: Flow<String>
         get() = dsm.getPreferenceFlow(MobilePrefKeys.customFontNameRequest)
 
+    var bottomNavigationItems: List<MobileBottomNavItem>
+        get() = MobileBottomNavItem.fromPreference(read(MobilePrefKeys.bottomNavigationItemsRequest))
+        set(value) = write(MobilePrefKeys.bottomNavigationItemsKey, MobileBottomNavItem.toPreference(value))
+
+    val bottomNavigationItemsFlow: Flow<List<MobileBottomNavItem>>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.bottomNavigationItemsRequest)
+            .transform { emit(MobileBottomNavItem.fromPreference(it)) }
+
     var playerType: PlayerType
         get() = resolveMobilePlayerType(read(MobilePrefKeys.playerTypeRequest))
         set(value) = write(MobilePrefKeys.playerTypeKey, value.ordinal)
@@ -544,6 +552,7 @@ object MobilePrefKeys {
     val fontSizeLevelKey = intPreferencesKey("mobile_font_size_level")
     val customFontPathKey = stringPreferencesKey("mobile_custom_font_path")
     val customFontNameKey = stringPreferencesKey("mobile_custom_font_name")
+    val bottomNavigationItemsKey = stringPreferencesKey("mobile_bottom_navigation_items")
     val playerTypeKey = intPreferencesKey("mobile_player_type")
     val apiTypeKey = intPreferencesKey("mobile_api_type")
     val defaultQualityKey = intPreferencesKey("mobile_default_quality")
@@ -630,6 +639,10 @@ object MobilePrefKeys {
     val fontSizeLevelRequest = PreferenceRequest(fontSizeLevelKey, MobilePrefs.STANDARD_FONT_SIZE_LEVEL)
     val customFontPathRequest = PreferenceRequest(customFontPathKey, "")
     val customFontNameRequest = PreferenceRequest(customFontNameKey, "")
+    val bottomNavigationItemsRequest = PreferenceRequest(
+        bottomNavigationItemsKey,
+        MobileBottomNavItem.toPreference(MobileBottomNavItem.defaultItems)
+    )
     val playerTypeRequest = PreferenceRequest(playerTypeKey, PlayerType.Media3.ordinal)
     val apiTypeRequest = PreferenceRequest(apiTypeKey, ApiType.App.ordinal)
     val defaultQualityRequest = PreferenceRequest(defaultQualityKey, Resolution.R1080P.code)

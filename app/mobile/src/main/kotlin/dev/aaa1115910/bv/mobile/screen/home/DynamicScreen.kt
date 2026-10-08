@@ -78,6 +78,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -190,7 +191,8 @@ fun DynamicScreen(
     dynamicViewModel: DynamicViewModel = koinViewModel(),
     dynamicGridState: LazyStaggeredGridState,
     previewerState: ImagePreviewerState,
-    onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit
+    onShowPreviewer: (newPictures: List<Picture>, afterSetPictures: () -> Unit) -> Unit,
+    onOpenMine: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -298,6 +300,11 @@ fun DynamicScreen(
                     }
                 },
                 actions = {
+                    if (onOpenMine != null) {
+                        IconButton(onClick = onOpenMine) {
+                            Icon(Icons.Rounded.Person, contentDescription = "我的与设置")
+                        }
+                    }
                     IconButton(
                         modifier = Modifier.padding(end = 8.dp),
                         onClick = {

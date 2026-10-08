@@ -44,6 +44,7 @@ import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material3.AlertDialog
@@ -82,6 +83,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import dev.aaa1115910.bv.entity.ThemeType
+import dev.aaa1115910.bv.mobile.settings.MobileBottomNavItem
 import dev.aaa1115910.bv.mobile.settings.MobilePrefs
 import dev.aaa1115910.bv.mobile.theme.BVMobileTheme
 import dev.aaa1115910.bv.mobile.theme.LocalVideoCardBlurBackgroundEnabled
@@ -121,6 +123,9 @@ fun AppearanceContent(
     )
     val customFontName by MobilePrefs.customFontNameFlow.collectAsState(
         initial = MobilePrefs.customFontName
+    )
+    val bottomNavigationItems by MobilePrefs.bottomNavigationItemsFlow.collectAsState(
+        initial = MobilePrefs.bottomNavigationItems
     )
     val isFixedPalette = themePalette != MobileThemePalette.MaterialDynamic
     var showCustomColorDialog by remember { mutableStateOf(false) }
@@ -180,6 +185,56 @@ fun AppearanceContent(
                 themePalette = themePalette,
                 seedColor = seedColor
             )
+        }
+
+        item {
+            ScrollSectionCard(
+                title = "底栏",
+                icon = Icons.Rounded.Menu,
+                action = {
+                    TextButton(onClick = {
+                        MobilePrefs.bottomNavigationItems = MobileBottomNavItem.defaultItems
+                    }) {
+                        Text(text = "重置")
+                    }
+                }
+            ) {
+                Text(
+                    text = "选择底栏显示的入口，至少保留一项。设置可从“我的”进入。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                MobileBottomNavItem.entries.forEach { item ->
+                    val checked = item in bottomNavigationItems
+                    val enabled = !checked || bottomNavigationItems.size > 1
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
+                            .toggleable(
+                                value = checked,
+                                enabled = enabled,
+                                role = Role.Switch,
+                                onValueChange = { selected ->
+                                    MobilePrefs.bottomNavigationItems = MobileBottomNavItem.withItemEnabled(
+                                        bottomNavigationItems, item, selected
+                                    )
+                                }
+                            )
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            modifier = Modifier.weight(1f),
+                            text = item.displayName,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Switch(checked = checked, enabled = enabled, onCheckedChange = null)
+                    }
+                }
+            }
         }
 
         item {

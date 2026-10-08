@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -20,6 +22,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -29,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -60,7 +64,10 @@ import org.koin.androidx.compose.koinViewModel
 fun HistoryScreen(
     modifier: Modifier = Modifier,
     windowSize: WindowSizeClass,
-    historyViewModel: HistoryViewModel = koinViewModel()
+    historyViewModel: HistoryViewModel = koinViewModel(),
+    showBackButton: Boolean = true,
+    onOpenMine: (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val listState = rememberLazyGridState()
@@ -95,20 +102,31 @@ fun HistoryScreen(
 
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        contentWindowInsets = if (showBackButton) ScaffoldDefaults.contentWindowInsets
+            else ScaffoldDefaults.contentWindowInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         topBar = {
             Column {
                 TopAppBar(
                     title = { Text(stringResource(R.string.title_mobile_activity_history)) },
                     navigationIcon = {
-                        IconButton(
-                            onClick = {
-                                if (showSearch) closeSearch() else (context as Activity).finish()
+                        if (showBackButton || showSearch) {
+                            IconButton(
+                                onClick = {
+                                    if (showSearch) closeSearch()
+                                    else if (onBack != null) onBack()
+                                    else (context as Activity).finish()
+                                }
+                            ) {
+                                Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = "返回")
                             }
-                        ) {
-                            Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = "返回")
                         }
                     },
                     actions = {
+                        if (onOpenMine != null) {
+                            IconButton(onClick = onOpenMine) {
+                                Icon(Icons.Rounded.Person, contentDescription = "我的与设置")
+                            }
+                        }
                         IconButton(onClick = { if (showSearch) closeSearch() else showSearch = true }) {
                             Icon(Icons.Default.Search, contentDescription = "搜索观看历史")
                         }

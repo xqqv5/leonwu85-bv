@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.rounded.Check
@@ -43,6 +46,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -87,7 +91,10 @@ import org.koin.androidx.compose.koinViewModel
 fun FavoriteScreen(
     modifier: Modifier = Modifier,
     windowSize: WindowSizeClass,
-    favoriteViewModel: FavoriteViewModel = koinViewModel()
+    favoriteViewModel: FavoriteViewModel = koinViewModel(),
+    showBackButton: Boolean = true,
+    onOpenMine: (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val listState = rememberLazyGridState()
@@ -143,8 +150,11 @@ fun FavoriteScreen(
         onDeleteFolder = { showDeleteFolder = true },
         onBack = {
             if (favoriteViewModel.selectionMode) favoriteViewModel.toggleSelectionMode()
+            else if (onBack != null) onBack()
             else (context as Activity).finish()
-        }
+        },
+        showBackButton = showBackButton,
+        onOpenMine = onOpenMine
     )
 
     pendingRemove?.let { video ->
@@ -231,6 +241,8 @@ private fun FavoriteContent(
     onCleanFolder: () -> Unit,
     onDeleteFolder: () -> Unit,
     onBack: () -> Unit,
+    showBackButton: Boolean = true,
+    onOpenMine: (() -> Unit)? = null,
     batchControls: @Composable () -> Unit = {},
     selectionMode: Boolean = false,
     selectedIds: Set<Long> = emptySet(),
@@ -251,6 +263,8 @@ private fun FavoriteContent(
 
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        contentWindowInsets = if (showBackButton) ScaffoldDefaults.contentWindowInsets
+            else ScaffoldDefaults.contentWindowInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         topBar = {
             Column {
                 TopAppBar(
@@ -259,15 +273,22 @@ private fun FavoriteContent(
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     },
                     navigationIcon = {
-                        IconButton(
-                            onClick = { if (showSearch && !selectionMode) closeSearch() else onBack() },
-                            enabled = !selectionMode || !operating
-                        ) {
-                            Icon(if (selectionMode) Icons.Rounded.Close else Icons.AutoMirrored.Default.ArrowBack,
-                                contentDescription = if (selectionMode) "完成选择" else "返回")
+                        if (showBackButton || showSearch || selectionMode) {
+                            IconButton(
+                                onClick = { if (showSearch && !selectionMode) closeSearch() else onBack() },
+                                enabled = !selectionMode || !operating
+                            ) {
+                                Icon(if (selectionMode) Icons.Rounded.Close else Icons.AutoMirrored.Default.ArrowBack,
+                                    contentDescription = if (selectionMode) "完成选择" else "返回")
+                            }
                         }
                     },
                     actions = {
+                        if (onOpenMine != null && !selectionMode) {
+                            IconButton(onClick = onOpenMine) {
+                                Icon(Icons.Rounded.Person, contentDescription = "我的与设置")
+                            }
+                        }
                         if (selectionMode) {
                             TextButton(onClick = onSelectAllLoaded, enabled = !operating && favorites.isNotEmpty()) {
                                 Text(if (allLoadedSelected) "取消全选" else "全选已加载")
