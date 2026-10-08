@@ -2436,6 +2436,7 @@ class VideoPlayerV3ViewModel(
                 geetestValidationPending = null
                 geetestGt = registration.gt
                 geetestChallenge = registration.challenge
+                showGeetestDialog = true
                 true
             }
             if (applied) {
@@ -2472,6 +2473,10 @@ class VideoPlayerV3ViewModel(
         // TV WebView/HTTP 回调可能来自后台线程。先进入 ViewModel 主线程，
         // 再读取待验证状态，避免读不到 token 后静默返回。
         viewModelScope.launch {
+            if (!showGeetestDialog) {
+                logger.fDebug { "Ignore Geetest result after the verification dialog was closed" }
+                return@launch
+            }
             val pending = pendingGeetestVerification
             if (pending == null) {
                 logger.fWarn { "Ignore Geetest result because no verification is pending" }
@@ -2530,6 +2535,7 @@ class VideoPlayerV3ViewModel(
                 authRepository.gaiaVtoken = griskId
                 geetestRegistrationGeneration += 1
                 val reboundPending = rebindGeetestToNextVodPlaybackSession(pending)
+                showGeetestDialog = false
                 errorMessage = ""
                 loadState = RequestState.Ready
                 addLogs("风控验证通过")
@@ -2575,7 +2581,7 @@ class VideoPlayerV3ViewModel(
     fun onGeetestCancelled() {
         viewModelScope.launch {
             // 成功后 SDK/WebView 可能还会补发关闭回调，不能把已开始的重试改回失败。
-            if (pendingGeetestVerification == null) return@launch
+            if (pendingGeetestVerification == null || !showGeetestDialog) return@launch
             geetestRegistrationGeneration += 1
             geetestChallengeRefreshFlight?.deferred?.cancel()
             geetestChallengeRefreshFlight = null

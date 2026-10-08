@@ -1301,6 +1301,8 @@ internal fun buildGeetestHtml(gt: String, challenge: String): String {
   <div id="captcha"></div>
   <script>
     (function() {
+      var resultSubmitted = false;
+      var reopenTimer = null;
       function notify(msg) {
         try { window.Android.onStatusUpdate(msg); } catch(e) {}
       }
@@ -1308,6 +1310,7 @@ internal fun buildGeetestHtml(gt: String, challenge: String): String {
         try { window.Android.onVerificationType(type); } catch(e) {}
       }
       function reportSliderPosition(attempt) {
+        if (resultSubmitted) return;
         var selectors = [
           '.geetest_slider_button',
           '[class*="slider_button"]',
@@ -1357,13 +1360,20 @@ internal fun buildGeetestHtml(gt: String, challenge: String): String {
       }, function(captchaObj) {
         captchaObj.appendTo('#captcha');
         captchaObj.onReady(function() {
+          if (resultSubmitted) return;
           notify('请使用方向键移动光标，确认键点击');
           captchaObj.verify();
           setTimeout(function() { reportSliderPosition(0); }, 100);
         });
         captchaObj.onSuccess(function() {
+          if (resultSubmitted) return;
           var res = captchaObj.getValidate();
-          if (!res) return;
+          if (!res || !res.geetest_validate || !res.geetest_seccode || !res.geetest_challenge) return;
+          resultSubmitted = true;
+          if (reopenTimer !== null) {
+            clearTimeout(reopenTimer);
+            reopenTimer = null;
+          }
           notify('验证成功，正在提交…');
           try {
             window.Android.onGeetestResult(
@@ -1371,14 +1381,22 @@ internal fun buildGeetestHtml(gt: String, challenge: String): String {
               res.geetest_seccode,
               res.geetest_challenge
             );
-          } catch(e) {}
+          } catch(e) {
+            resultSubmitted = false;
+            notify('提交验证结果失败，请重试');
+          }
         });
         captchaObj.onError(function(e) {
+          if (resultSubmitted) return;
           notify('验证出错：' + (e && (e.msg || e.error_code) || '未知错误'));
         });
         captchaObj.onClose(function() {
+          if (resultSubmitted || reopenTimer !== null) return;
           notify('验证已关闭，正在重新打开…');
-          setTimeout(function() { captchaObj.verify(); }, 500);
+          reopenTimer = setTimeout(function() {
+            reopenTimer = null;
+            if (!resultSubmitted) captchaObj.verify();
+          }, 500);
         });
       });
     })();

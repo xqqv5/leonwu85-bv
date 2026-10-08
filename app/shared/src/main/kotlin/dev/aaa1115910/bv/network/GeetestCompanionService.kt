@@ -248,14 +248,22 @@ object GeetestCompanionService {
   <div id="status">正在加载验证码…</div>
   <div id="captcha"></div>
   <div id="ok" class="ok">验证成功，可返回电视</div>
+  <button id="retry" type="button" style="display:none">重新提交结果</button>
   <script>
     (function() {
       var sessionId = '$safeId';
+      var resultSubmitted = false;
+      var submissionInFlight = false;
+      var reopenTimer = null;
       function setStatus(msg) {
         var el = document.getElementById('status');
         if (el) el.textContent = msg;
       }
       function submitResult(validate, seccode, challenge) {
+        if (submissionInFlight) return;
+        submissionInFlight = true;
+        var retryButton = document.getElementById('retry');
+        retryButton.style.display = 'none';
         setStatus('正在提交结果…');
         fetch('/geetest/' + sessionId + '/result', {
           method: 'POST',
@@ -267,10 +275,14 @@ object GeetestCompanionService {
           })
         }).then(function(r) {
           if (!r.ok) throw new Error('submit failed');
+          submissionInFlight = false;
           setStatus('验证成功');
           document.getElementById('ok').style.display = 'block';
         }).catch(function(e) {
+          submissionInFlight = false;
           setStatus('提交失败，请重试：' + (e && e.message || e));
+          retryButton.onclick = function() { submitResult(validate, seccode, challenge); };
+          retryButton.style.display = 'block';
         });
       }
       if (typeof initGeetest !== 'function') {
@@ -287,20 +299,32 @@ object GeetestCompanionService {
       }, function(captchaObj) {
         captchaObj.appendTo('#captcha');
         captchaObj.onReady(function() {
+          if (resultSubmitted) return;
           setStatus('请完成下方验证');
           captchaObj.verify();
         });
         captchaObj.onSuccess(function() {
+          if (resultSubmitted) return;
           var res = captchaObj.getValidate();
-          if (!res) return;
+          if (!res || !res.geetest_validate || !res.geetest_seccode || !res.geetest_challenge) return;
+          resultSubmitted = true;
+          if (reopenTimer !== null) {
+            clearTimeout(reopenTimer);
+            reopenTimer = null;
+          }
           submitResult(res.geetest_validate, res.geetest_seccode, res.geetest_challenge);
         });
         captchaObj.onError(function(e) {
+          if (resultSubmitted) return;
           setStatus('验证出错：' + (e && (e.msg || e.error_code) || '未知错误'));
         });
         captchaObj.onClose(function() {
+          if (resultSubmitted || reopenTimer !== null) return;
           setStatus('验证已关闭，正在重新打开…');
-          setTimeout(function() { captchaObj.verify(); }, 500);
+          reopenTimer = setTimeout(function() {
+            reopenTimer = null;
+            if (!resultSubmitted) captchaObj.verify();
+          }, 500);
         });
       });
     })();
