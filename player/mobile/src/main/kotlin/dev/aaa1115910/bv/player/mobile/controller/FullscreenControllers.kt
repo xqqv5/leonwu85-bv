@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
-import androidx.compose.material.icons.rounded.ClosedCaption
 import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
@@ -73,6 +72,7 @@ fun FullscreenControllers(
     onShowDanmakuController: () -> Unit,
     onShowVideoListController: () -> Unit,
     onOpenMoreMenu: () -> Unit,
+    onShowSubtitleController: () -> Unit = {},
     dlnaAvailable: Boolean = false,
     dlnaSessionActive: Boolean = false,
     pictureInPictureSupported: Boolean = false,
@@ -99,6 +99,7 @@ fun FullscreenControllers(
             onCast = onCast,
             onEnterPictureInPicture = onEnterPictureInPicture,
             onOpenMoreMenu = onOpenMoreMenu,
+            onShowSubtitleController = onShowSubtitleController,
             onExitFullScreen = onExitFullScreen,
             title = videoPlayerVideoInfoData.displayTitle()
         )
@@ -137,6 +138,7 @@ private fun TopControllers(
     onCast: () -> Unit,
     onEnterPictureInPicture: () -> Unit,
     onOpenMoreMenu: () -> Unit,
+    onShowSubtitleController: () -> Unit,
     onExitFullScreen: () -> Unit,
     title: String
 ) {
@@ -212,14 +214,7 @@ private fun TopControllers(
                         )
                     }
                 }
-                IconButton(
-                    onClick = {},
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(imageVector = Icons.Rounded.ClosedCaption, contentDescription = null)
-                }
+                SubtitleButton(onClick = onShowSubtitleController)
                 IconButton(
                     onClick = onOpenMoreMenu,
                     colors = IconButtonDefaults.iconButtonColors(

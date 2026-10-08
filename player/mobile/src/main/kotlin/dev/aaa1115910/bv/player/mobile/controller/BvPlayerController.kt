@@ -8,6 +8,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.Settings
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,11 +31,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -89,11 +92,13 @@ import dev.aaa1115910.bv.player.mobile.controller.menu.DanmakuMenu
 import dev.aaa1115910.bv.player.mobile.controller.menu.DashMenu
 import dev.aaa1115910.bv.player.mobile.controller.menu.MoreMenu
 import dev.aaa1115910.bv.player.mobile.controller.menu.SpeedMenu
+import dev.aaa1115910.bv.player.mobile.controller.menu.SubtitleMenu
 import dev.aaa1115910.bv.player.mobile.controller.menu.VideoListMenu
 import dev.aaa1115910.bv.player.seekbar.SeekBar
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BvPlayerController(
     modifier: Modifier = Modifier,
@@ -112,6 +117,8 @@ fun BvPlayerController(
     onChangeLiveCodec: (LiveCodec) -> Unit = {},
     onChangeLiveLine: (Int) -> Unit = {},
     onChangeSpeed: (Float) -> Unit,
+    onChangeSubtitle: (Long) -> Unit = {},
+    onChangeSecondarySubtitle: (Long) -> Unit = {},
     onToggleDanmaku: (Boolean) -> Unit,
     onEnabledDanmakuTypesChange: (List<DanmakuType>) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -147,7 +154,7 @@ fun BvPlayerController(
 
     var isMenuOpen by remember { mutableStateOf(false) }
     val videoContentWidth by animateFloatAsState(
-        targetValue = if (controlsEnabled && isMenuOpen) 0.7f else 1f
+        targetValue = if (controlsEnabled && isMenuOpen && isFullScreen) 0.7f else 1f
     )
     val settingsContentOffset by remember(screenHeight, screenWidth) {
         derivedStateOf {
@@ -164,9 +171,10 @@ fun BvPlayerController(
         isMenuOpen = true
     }
 
-    LaunchedEffect(isFullScreen) {
-        if (!isFullScreen) isMenuOpen = false
+    LaunchedEffect(isFullScreen, controlsEnabled) {
+        if (!isFullScreen || !controlsEnabled) isMenuOpen = false
     }
+    BackHandler(enabled = controlsEnabled && isMenuOpen) { isMenuOpen = false }
 
     // Keep the media content in one composition slot when PiP only hides the controls. Moving it
     // between branches disposes AndroidView surfaces and can release externally owned players.
@@ -198,6 +206,7 @@ fun BvPlayerController(
                 onOpenResolutionMenu = { openMenu(MenuType.Resolution) },
                 onOpenDanmakuMenu = { openMenu(MenuType.Danmaku) },
                 onOpenListMenu = { openMenu(MenuType.List) },
+                onOpenSubtitleMenu = { openMenu(MenuType.Subtitle) },
                 onCloseMenu = { isMenuOpen = false },
                 dlnaAvailable = dlnaAvailable,
                 dlnaSessionActive = dlnaSessionActive,
@@ -221,7 +230,7 @@ fun BvPlayerController(
             }
         }
 
-        if (controlsEnabled) {
+        if (controlsEnabled && isFullScreen) {
             Row(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -246,6 +255,8 @@ fun BvPlayerController(
                     onChangeLiveCodec = onChangeLiveCodec,
                     onChangeLiveLine = onChangeLiveLine,
                     onChangeSpeed = onChangeSpeed,
+                    onChangeSubtitle = onChangeSubtitle,
+                    onChangeSecondarySubtitle = onChangeSecondarySubtitle,
                     onEnabledDanmakuTypesChange = onEnabledDanmakuTypesChange,
                     onDanmakuOpacityChange = onDanmakuOpacityChange,
                     onDanmakuScaleChange = onDanmakuScaleChange,
@@ -256,6 +267,19 @@ fun BvPlayerController(
                     onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
                     onPlayModeChange = onPlayModeChange,
                     onPlayNewVideo = onPlayNewVideo
+                )
+            }
+        }
+    }
+
+    if (controlsEnabled && isMenuOpen && !isFullScreen && menuType == MenuType.Subtitle) {
+        MaterialDarkTheme {
+            ModalBottomSheet(onDismissRequest = { isMenuOpen = false }) {
+                SubtitleMenu(
+                    modifier = Modifier.fillMaxHeight(0.7f),
+                    onChangeSubtitle = onChangeSubtitle,
+                    onChangeSecondarySubtitle = onChangeSecondarySubtitle,
+                    onClose = { isMenuOpen = false },
                 )
             }
         }
@@ -278,6 +302,8 @@ private fun BvPlayerControllerSettings(
     onChangeLiveCodec: (LiveCodec) -> Unit = {},
     onChangeLiveLine: (Int) -> Unit = {},
     onChangeSpeed: (Float) -> Unit,
+    onChangeSubtitle: (Long) -> Unit = {},
+    onChangeSecondarySubtitle: (Long) -> Unit = {},
     onEnabledDanmakuTypesChange: (List<DanmakuType>) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
     onDanmakuScaleChange: (Float) -> Unit,
@@ -339,7 +365,11 @@ private fun BvPlayerControllerSettings(
                 }
 
                 MenuType.Subtitle -> {
-
+                    SubtitleMenu(
+                        onChangeSubtitle = onChangeSubtitle,
+                        onChangeSecondarySubtitle = onChangeSecondarySubtitle,
+                        onClose = onCloseMenu,
+                    )
                 }
 
                 MenuType.More -> {
@@ -372,6 +402,7 @@ fun BvPlayerControllerVideoContent(
     onOpenResolutionMenu: () -> Unit,
     onOpenDanmakuMenu: () -> Unit,
     onOpenListMenu: () -> Unit,
+    onOpenSubtitleMenu: () -> Unit = {},
     onCloseMenu: () -> Unit,
     dlnaAvailable: Boolean = false,
     dlnaSessionActive: Boolean = false,
@@ -526,6 +557,14 @@ fun BvPlayerControllerVideoContent(
     ) playerContent@{
         content()
 
+        if (!showManualStartOverlay) {
+            BottomSubtitles(
+                isFullScreen = isFullScreen,
+                isInPictureInPicture = !controlsEnabled,
+                controlsVisible = controlsEnabled && showBaseUi,
+            )
+        }
+
         if (!controlsEnabled) return@playerContent
 
         if (videoPlayerStateData.isBuffering && !videoPlayerStateData.isError && !showManualStartOverlay) {
@@ -674,6 +713,10 @@ fun BvPlayerControllerVideoContent(
                         showBaseUi = false
                         onOpenListMenu()
                     },
+                    onShowSubtitleController = {
+                        showBaseUi = false
+                        onOpenSubtitleMenu()
+                    },
                     dlnaAvailable = dlnaAvailable,
                     dlnaSessionActive = dlnaSessionActive,
                     pictureInPictureSupported = pictureInPictureSupported,
@@ -691,6 +734,7 @@ fun BvPlayerControllerVideoContent(
                     onPause = onPause,
                     onEnterFullScreen = onEnterFullScreen,
                     onSeekToPosition = onSeekToPosition,
+                    onShowSubtitleController = onOpenSubtitleMenu,
                     dlnaAvailable = dlnaAvailable,
                     dlnaSessionActive = dlnaSessionActive,
                     pictureInPictureSupported = pictureInPictureSupported,

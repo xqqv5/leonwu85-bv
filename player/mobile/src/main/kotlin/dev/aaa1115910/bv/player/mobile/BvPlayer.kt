@@ -138,6 +138,8 @@ fun BvPlayer(
     onChangeLiveCodec: (LiveCodec) -> Unit = {},
     onChangeLiveLine: (Int) -> Unit = {},
     onChangeSpeed: (Float) -> Unit,
+    onChangeSubtitle: (Long) -> Unit = {},
+    onChangeSecondarySubtitle: (Long) -> Unit = {},
     onToggleDanmaku: (Boolean) -> Unit,
     onEnabledDanmakuTypesChange: (List<DanmakuType>) -> Unit,
     onDanmakuOpacityChange: (Float) -> Unit,
@@ -888,6 +890,8 @@ fun BvPlayer(
             },
             onDanmakuMergeChange = onDanmakuMergeChange,
             onDanmakuFilterLevelChange = onDanmakuFilterLevelChange,
+            onChangeSubtitle = onChangeSubtitle,
+            onChangeSecondarySubtitle = onChangeSecondarySubtitle,
             onPlayModeChange = onPlayModeChange,
             onPlayNewVideo = {
                 sendHeartbeat()

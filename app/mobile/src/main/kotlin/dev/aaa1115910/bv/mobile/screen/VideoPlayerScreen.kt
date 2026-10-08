@@ -251,6 +251,7 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerSeekThumbData
 import dev.aaa1115910.bv.player.entity.VideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerVideoShotData
 import dev.aaa1115910.bv.player.mobile.BvPlayer
+import dev.aaa1115910.bv.mobile.component.player.rememberMediaMuteState
 import dev.aaa1115910.bv.player.mobile.LocalVideoHighEnergyState
 import dev.aaa1115910.bv.player.mobile.VideoHighEnergyState
 import dev.aaa1115910.bv.player.entity.Resolution
@@ -340,6 +341,17 @@ fun VideoPlayerScreen(
     val playerSettings = PlayerSettingsProvider.current
     val useDarkSystemBarIcons = MaterialTheme.colorScheme.surface.luminance() > 0.5f
     val useLightSystemBarIcons = playerViewModel.isLive || !useDarkSystemBarIcons
+
+    val initialAutoShowSubtitleWhenMuted = remember { MobilePrefs.autoShowSubtitleWhenMuted }
+    val autoShowSubtitleWhenMuted by MobilePrefs.autoShowSubtitleWhenMutedFlow.collectAsState(
+        initial = initialAutoShowSubtitleWhenMuted
+    )
+    val mediaMuted by rememberMediaMuteState(
+        enabled = autoShowSubtitleWhenMuted && !playerViewModel.isLive
+    )
+    LaunchedEffect(playerViewModel, autoShowSubtitleWhenMuted, mediaMuted, playerViewModel.isLive) {
+        playerViewModel.updateAutoSubtitleForMute(autoShowSubtitleWhenMuted && mediaMuted)
+    }
 
     val initialShowHighEnergyProgress = remember { MobilePrefs.showHighEnergyProgress }
     val showHighEnergyProgress by MobilePrefs.showHighEnergyProgressFlow.collectAsState(
@@ -967,6 +979,11 @@ fun VideoPlayerScreen(
                             currentSubtitleFontSize = playerViewModel.currentSubtitleFontSize,
                             currentSubtitleBackgroundOpacity = playerViewModel.currentSubtitleBackgroundOpacity,
                             currentSubtitleBottomPadding = playerViewModel.currentSubtitleBottomPadding,
+                            currentSecondarySubtitleId = playerViewModel.currentSecondarySubtitleId,
+                            currentSecondarySubtitleData = playerViewModel.currentSecondarySubtitleData,
+                            currentSecondarySubtitleFontSize = playerViewModel.currentSecondarySubtitleFontSize,
+                            currentSecondarySubtitleBackgroundOpacity = playerViewModel.currentSecondarySubtitleBackgroundOpacity,
+                            currentSecondarySubtitleBottomPadding = playerViewModel.currentSecondarySubtitleBottomPadding,
                             currentPlayMode = playerViewModel.currentPlayMode,
                             incognitoMode = playerSettings.incognitoMode,
                             defaultStartPosition = playerSettings.playerDefaultStartPosition.toPlayerType(),
@@ -1059,6 +1076,8 @@ fun VideoPlayerScreen(
                             onChangeSpeed = { speed ->
                                 playerViewModel.currentPlaySpeed = speed
                             },
+                            onChangeSubtitle = playerViewModel::loadSubtitle,
+                            onChangeSecondarySubtitle = playerViewModel::loadSecondarySubtitle,
                             onToggleDanmaku = { enabled ->
                                 playerViewModel.currentDanmakuEnabled = enabled
                                 if (playerViewModel.isLive) playerViewModel.showDanmaku = enabled

@@ -110,6 +110,7 @@ import dev.aaa1115910.bv.util.DanmakuSegmentMergeResult
 import dev.aaa1115910.bv.util.DanmakuSmartFilterPolicy
 import dev.aaa1115910.bv.util.DeviceUtil
 import dev.aaa1115910.bv.util.MergedDanmakuEntry
+import dev.aaa1115910.bv.util.MutedSubtitlePolicy
 import dev.aaa1115910.bv.util.NetworkUtil
 import dev.aaa1115910.bv.util.PlaybackPreferenceSelector
 import dev.aaa1115910.bv.util.Prefs
@@ -639,6 +640,8 @@ class VideoPlayerV3ViewModel(
     var currentSecondarySubtitleBottomPadding by mutableStateOf(settings.defaultSecondarySubtitleBottomPadding)
     private var currentPrimarySubtitleLoadToken = 0L
     private var currentSecondarySubtitleLoadToken = 0L
+    private val mutedSubtitlePolicy = MutedSubtitlePolicy()
+    private var subtitleMetadataCid = -1L
 
     var currentPlayMode by mutableStateOf(settings.defaultPlayMode)
 
@@ -1393,6 +1396,7 @@ class VideoPlayerV3ViewModel(
         hasResolvedVodStartPosition = true
         resolvedVodStartPositionSessionToken = playbackSessionToken
         val videoChanged = currentAid != avid || currentCid != cid
+        val lastPlayEnabledSubtitle = currentSubtitleId != -1L
         if (videoChanged || preferOfflineCache) {
             resetVodBufferRecovery()
         }
@@ -1415,6 +1419,11 @@ class VideoPlayerV3ViewModel(
             invalidatePreparedAutoPlayTarget()
             resetResolvedDanmakuMask(clearMasks = true)
             viewPoints = emptyList()
+            mutedSubtitlePolicy.resetForVideo()
+            subtitleMetadataCid = -1L
+            availableSubtitle.clear()
+            clearSubtitleState(SubtitleSlot.Primary, invalidateRequest = true)
+            clearSubtitleState(SubtitleSlot.Secondary, invalidateRequest = true)
         }
         currentAid = avid
         currentCid = cid
@@ -1443,17 +1452,21 @@ class VideoPlayerV3ViewModel(
                 addLogs("av$avid，cid:$cid")
             }
 
-            val lastPlayEnabledSubtitle = currentSubtitleId != -1L
             if (lastPlayEnabledSubtitle && settings.subtitleSmartDisplay) {
                 logger.info { "Subtitle is enabled, next video will enable subtitle automatic" }
             }
 
             val useOfflinePlaybackSource = preferOfflineCache && offlineVideoCacheService.getCompletedEntry(avid, cid) != null
             if (!useOfflinePlaybackSource) {
-                updateSubtitle()
-                enableSmartSubtitleIfAvailable(
-                    fallbackToFirstSubtitle = continuePlayNext && lastPlayEnabledSubtitle && upId <= 0L
-                )
+                if (updateSubtitle(avid, cid, playbackSessionToken)) {
+                    withContext(Dispatchers.Main) {
+                        if (isVodPlaybackSessionActive(playbackSessionToken)) {
+                            enableSmartSubtitleIfAvailable(
+                                fallbackToFirstSubtitle = continuePlayNext && lastPlayEnabledSubtitle && upId <= 0L
+                            )
+                        }
+                    }
+                }
             }
             val playUrlLoaded = loadPlayUrl(
                 avid = avid,
@@ -4475,17 +4488,28 @@ class VideoPlayerV3ViewModel(
         }
     }
 
-    private suspend fun updateSubtitle() {
-        clearSubtitleState(SubtitleSlot.Primary, invalidateRequest = true)
-        clearSubtitleState(SubtitleSlot.Secondary, invalidateRequest = true)
+    private suspend fun updateSubtitle(aid: Long, cid: Long, playbackSessionToken: Long): Boolean {
+        val shouldLoad = withContext(Dispatchers.Main) {
+            if (!isVodPlaybackSessionActive(playbackSessionToken)) return@withContext false
+            clearSubtitleState(SubtitleSlot.Primary, invalidateRequest = true)
+            clearSubtitleState(SubtitleSlot.Secondary, invalidateRequest = true)
+            mutedSubtitlePolicy.resetAutomaticSelection()
+            subtitleMetadataCid = -1L
+            availableSubtitle.clear()
+            true
+        }
+        if (!shouldLoad) return false
 
-        runCatching {
+        return try {
             val subtitleData = videoPlayRepository.getSubtitle(
-                aid = currentAid,
-                cid = currentCid,
+                aid = aid,
+                cid = cid,
                 preferApiType = settings.apiType
             )
-            withContext(Dispatchers.Main) {
+            val applied = withContext(Dispatchers.Main) {
+                if (!isVodPlaybackSessionActive(playbackSessionToken) || currentAid != aid || currentCid != cid) {
+                    return@withContext false
+                }
                 availableSubtitle.clear()
                 availableSubtitle.add(
                     Subtitle(
@@ -4500,13 +4524,35 @@ class VideoPlayerV3ViewModel(
                 )
                 availableSubtitle.addAll(subtitleData)
                 availableSubtitle.sortBy { it.id }
+                subtitleMetadataCid = cid
+                enableMutedSubtitleIfAvailable()
+                true
             }
+            if (!applied) return false
             addLogs("获取到 ${subtitleData.size} 条字幕: ${subtitleData.map { it.langDoc }}")
             logger.fInfo { "Update subtitle size: ${subtitleData.size}" }
-        }.onFailure {
-            addLogs("获取字幕失败：${it.localizedMessage}")
-            logger.fWarn { "Update subtitle failed: ${it.stackTraceToString()}" }
+            true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            addLogs("获取字幕失败：${error.localizedMessage}")
+            logger.fWarn { "Update subtitle failed: ${error.stackTraceToString()}" }
+            false
         }
+    }
+
+    fun updateAutoSubtitleForMute(active: Boolean) {
+        if (mutedSubtitlePolicy.setActive(active && !isLive)) {
+            clearSubtitleState(SubtitleSlot.Primary, invalidateRequest = true)
+            clearSubtitleState(SubtitleSlot.Secondary, invalidateRequest = true)
+        }
+        enableMutedSubtitleIfAvailable()
+    }
+
+    private fun enableMutedSubtitleIfAvailable() {
+        if (isLive || currentCid != subtitleMetadataCid) return
+        mutedSubtitlePolicy.selectAutomaticSubtitle(currentSubtitleId, availableSubtitle.toList())
+            ?.let { loadSubtitle(SubtitleSlot.Primary, it) }
     }
 
     private fun enableFirstSubtitle() {
@@ -4661,10 +4707,12 @@ class VideoPlayerV3ViewModel(
     }
 
     fun loadSubtitle(id: Long) {
+        mutedSubtitlePolicy.onManualSelection()
         loadSubtitle(SubtitleSlot.Primary, id)
     }
 
     fun loadSecondarySubtitle(id: Long) {
+        mutedSubtitlePolicy.onManualSelection()
         loadSubtitle(SubtitleSlot.Secondary, id)
     }
 

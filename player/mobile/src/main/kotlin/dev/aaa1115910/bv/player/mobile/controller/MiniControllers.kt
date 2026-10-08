@@ -46,6 +46,7 @@ fun MiniControllers(
     onPause: () -> Unit,
     onEnterFullScreen: () -> Unit,
     onSeekToPosition: (Long) -> Unit,
+    onShowSubtitleController: () -> Unit = {},
     dlnaAvailable: Boolean = false,
     dlnaSessionActive: Boolean = false,
     pictureInPictureSupported: Boolean = false,
@@ -62,6 +63,7 @@ fun MiniControllers(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth(),
             onBack = onBack,
+            onShowSubtitleController = onShowSubtitleController,
             dlnaAvailable = dlnaAvailable,
             dlnaSessionActive = dlnaSessionActive,
             pictureInPictureSupported = pictureInPictureSupported,
@@ -85,6 +87,7 @@ fun MiniControllers(
 private fun TopControllers(
     modifier: Modifier = Modifier,
     onBack: () -> Unit,
+    onShowSubtitleController: () -> Unit,
     dlnaAvailable: Boolean,
     dlnaSessionActive: Boolean,
     pictureInPictureSupported: Boolean,
@@ -114,6 +117,7 @@ private fun TopControllers(
                 overflow = TextOverflow.Ellipsis,
                 color = Color.White
             )
+            SubtitleButton(onClick = onShowSubtitleController)
             HighEnergyProgressToggleButton()
             if (dlnaAvailable) {
                 IconButton(onClick = onCast) {

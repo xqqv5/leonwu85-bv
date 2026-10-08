@@ -352,6 +352,13 @@ object MobilePrefs {
         get() = sanitizeLiveDanmakuFilterLevel(read(MobilePrefKeys.defaultLiveDanmakuFilterLevelRequest))
         set(value) = write(MobilePrefKeys.defaultLiveDanmakuFilterLevelKey, sanitizeLiveDanmakuFilterLevel(value))
 
+    var autoShowSubtitleWhenMuted: Boolean
+        get() = read(MobilePrefKeys.autoShowSubtitleWhenMutedRequest)
+        set(value) = write(MobilePrefKeys.autoShowSubtitleWhenMutedKey, value)
+
+    val autoShowSubtitleWhenMutedFlow: Flow<Boolean>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.autoShowSubtitleWhenMutedRequest)
+
     var defaultSubtitleFontSize: TextUnit
         get() = read(MobilePrefKeys.defaultSubtitleFontSizeRequest).sp
         set(value) = write(MobilePrefKeys.defaultSubtitleFontSizeKey, value.value.roundToInt())
@@ -591,6 +598,7 @@ object MobilePrefKeys {
     val defaultDanmakuFilterLevelKey = intPreferencesKey("mobile_default_danmaku_filter_level")
     val defaultDanmakuMergeEnabledKey = booleanPreferencesKey("mobile_default_danmaku_merge_enabled")
     val defaultLiveDanmakuFilterLevelKey = intPreferencesKey("mobile_default_live_danmaku_filter_level")
+    val autoShowSubtitleWhenMutedKey = booleanPreferencesKey("mobile_auto_show_subtitle_when_muted")
     val defaultSubtitleFontSizeKey = intPreferencesKey("mobile_default_subtitle_font_size")
     val defaultSubtitleBackgroundOpacityKey = floatPreferencesKey("mobile_default_subtitle_background_opacity")
     val defaultSubtitleBottomPaddingKey = intPreferencesKey("mobile_default_subtitle_bottom_padding")
@@ -686,6 +694,7 @@ object MobilePrefKeys {
     val defaultDanmakuFilterLevelRequest = PreferenceRequest(defaultDanmakuFilterLevelKey, 1)
     val defaultDanmakuMergeEnabledRequest = PreferenceRequest(defaultDanmakuMergeEnabledKey, true)
     val defaultLiveDanmakuFilterLevelRequest = PreferenceRequest(defaultLiveDanmakuFilterLevelKey, 0)
+    val autoShowSubtitleWhenMutedRequest = PreferenceRequest(autoShowSubtitleWhenMutedKey, false)
     val defaultSubtitleFontSizeRequest = PreferenceRequest(defaultSubtitleFontSizeKey, 24)
     val defaultSubtitleBackgroundOpacityRequest = PreferenceRequest(defaultSubtitleBackgroundOpacityKey, 0.4f)
     val defaultSubtitleBottomPaddingRequest = PreferenceRequest(defaultSubtitleBottomPaddingKey, 12)

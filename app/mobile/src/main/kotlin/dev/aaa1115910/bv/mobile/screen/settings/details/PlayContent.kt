@@ -82,6 +82,14 @@ fun PlayContent(
                     onCheckedChange = { true }
                 )
             },
+            "字幕" to {
+                switchPreference(
+                    title = "静音时自动显示字幕",
+                    summary = "媒体音量为零或静音时自动开启字幕，适用于小窗和全屏",
+                    prefReq = MobilePrefKeys.autoShowSubtitleWhenMutedRequest,
+                    onCheckedChange = { true }
+                )
+            },
             "弹幕" to {
                 switchPreference(
                     title = "默认显示弹幕",
