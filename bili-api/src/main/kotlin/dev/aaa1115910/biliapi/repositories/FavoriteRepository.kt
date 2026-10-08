@@ -240,24 +240,28 @@ class FavoriteRepository(
         ).requireSuccess()
     }
 
-    suspend fun transferResources(request: FavoriteTransferRequest, mode: FavoriteTransferMode) {
+    suspend fun transferResources(
+        request: FavoriteTransferRequest,
+        mode: FavoriteTransferMode
+    ): FavoriteFolderMetadata {
         val target = FavoriteFolderMetadata.fromHttpFavoriteFolderInfo(getFavoriteFolderInfo(request.targetId))
-        if (request.resourcesInDisplayOrder.size > target.remainingCapacity) {
-            val ids = BiliHttpApi.getFavoriteIdList(
-                mediaId = request.targetId, sessData = authRepository.sessionData
-            )
-            dev.aaa1115910.biliapi.http.entity.BiliResponseWithoutData(ids.code, ids.message).requireSuccess()
-            val existing = ids.data.orEmpty().map { it.id to FavoriteItemType.fromValue(it.type) }.toSet()
-            val additions = request.resourcesInDisplayOrder.distinct().count { it !in existing }
-            require(additions <= target.remainingCapacity) {
-                "目标收藏夹仅剩 ${target.remainingCapacity} 个位置，需新增 $additions 项"
-            }
+        val ids = BiliHttpApi.getFavoriteIdList(
+            mediaId = request.targetId, sessData = authRepository.sessionData
+        )
+        dev.aaa1115910.biliapi.http.entity.BiliResponseWithoutData(ids.code, ids.message).requireSuccess()
+        val existing = ids.data.orEmpty().map { it.id to FavoriteItemType.fromValue(it.type) }.toSet()
+        val additions = request.resourcesInDisplayOrder.distinct().count { it !in existing }
+        val remaining = (target.capacity - existing.size).coerceAtLeast(0)
+        require(additions <= remaining) {
+            "目标收藏夹仅剩 $remaining 个位置，需新增 $additions 项"
         }
         BiliHttpApi.transferFavoriteResources(
             request = request, mode = mode, mid = authRepository.mid ?: error("账号未登录"),
             csrf = authRepository.biliJct ?: error("账号未登录"),
             sessData = authRepository.sessionData ?: error("账号未登录")
         ).requireSuccess()
+        // Copy responses can precede updates to the server's folder count and ID list.
+        return target.copy(mediaCount = existing.size + additions)
     }
 
     suspend fun cleanFavoriteFolder(mediaId: Long) {

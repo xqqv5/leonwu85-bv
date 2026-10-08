@@ -200,7 +200,7 @@ fun AppearanceContent(
                 }
             ) {
                 Text(
-                    text = "选择底栏显示的入口，至少保留一项。设置可从“我的”进入。",
+                    text = "选择底栏显示的入口，至少保留一项。默认显示：首页、动态、设置。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

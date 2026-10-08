@@ -5,10 +5,11 @@ enum class MobileBottomNavItem(val displayName: String) {
     Dynamic("动态"),
     History("历史"),
     Favorite("收藏"),
-    Mine("我的");
+    Mine("我的"),
+    Setting("设置");
 
     companion object {
-        val defaultItems: List<MobileBottomNavItem> = entries.toList()
+        val defaultItems: List<MobileBottomNavItem> = listOf(Home, Dynamic, Setting)
 
         fun sanitize(items: Collection<MobileBottomNavItem>): List<MobileBottomNavItem> =
             entries.filter { it in items }.ifEmpty { defaultItems }

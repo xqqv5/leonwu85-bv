@@ -128,7 +128,8 @@ internal fun FavoriteTransferSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f)
     ) {
         Column(Modifier.fillMaxWidth().heightIn(max = maxHeight)) {
             Column(

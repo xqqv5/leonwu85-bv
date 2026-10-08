@@ -53,6 +53,7 @@ import dev.aaa1115910.bv.player.entity.LocalVideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerStateData
 import dev.aaa1115910.bv.player.entity.LocalVideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.PlayMode
+import dev.aaa1115910.bv.player.entity.RequestState
 import dev.aaa1115910.bv.player.entity.Resolution
 import dev.aaa1115910.bv.player.entity.SponsorBlockSkipMode
 import dev.aaa1115910.bv.player.entity.VideoAspectRatio
@@ -187,7 +188,7 @@ fun BvPlayer(
     val videoPlayerConfigData = LocalVideoPlayerConfigData.current
     val videoPlayerDanmakuMaskData = LocalVideoPlayerDanmakuMasksData.current
     val videoPlayerHistoryData = LocalVideoPlayerHistoryData.current
-    // val videoPlayerLoadStateData = LocalVideoPlayerLoadStateData.current
+    val videoPlayerLoadStateData = LocalVideoPlayerLoadStateData.current
     // val videoPlayerLogsData = LocalVideoPlayerLogsData.current
     // val videoPlayerVideoInfoData = LocalVideoPlayerVideoInfoData.current
 
@@ -621,7 +622,11 @@ fun BvPlayer(
 
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(videoPlayer) {
+        // Live playback can start before this renderer subscribes to player events. Reconcile
+        // the state on attachment, including when an already-playing player survives recreation.
+        isPlaying = videoPlayer.isPlaying
+        if (isPlaying) hasStartedPlaybackOnce = true
         while (true) {
             updatePosition()
             delay(200)
@@ -777,7 +782,12 @@ fun BvPlayer(
     ) {
         BvPlayerController(
             modifier = modifier.then(
-                if (isPlaying && !isError) Modifier.keepScreenOn() else Modifier
+                // Keep a foreground live session awake through buffering and reconnection,
+                // even when no onPlay event has reached this renderer yet.
+                if (
+                    (isLive && videoPlayerLoadStateData.loadState != RequestState.Failed) ||
+                    (isPlaying && !isError)
+                ) Modifier.keepScreenOn() else Modifier
             ),
             isFullScreen = isFullScreen,
             controlsEnabled = controlsEnabled,

@@ -132,7 +132,8 @@ internal fun UserSpaceVideoControls(
     if (showLocate) {
         ModalBottomSheet(
             onDismissRequest = { showLocate = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f)
         ) {
             Column(
                 Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState())

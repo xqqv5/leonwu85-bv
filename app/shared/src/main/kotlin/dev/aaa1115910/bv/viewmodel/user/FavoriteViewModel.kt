@@ -116,7 +116,9 @@ class FavoriteViewModel(
         transferError = null
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { favoriteRepository.transferResources(request, mode) }
+                val target = withContext(Dispatchers.IO) {
+                    favoriteRepository.transferResources(request, mode)
+                }
                 if (mode == FavoriteTransferMode.Move && currentFavoriteFolderMetadata?.id == source.id) {
                     val moved = request.resourcesInDisplayOrder.map { it.first }.toSet()
                     favorites.removeAll { it.avid in moved }
@@ -126,11 +128,20 @@ class FavoriteViewModel(
                         currentFavoriteFolderMetadata = favoriteFolderMetadataList[index]
                     }
                 }
+                val targetIndex = favoriteFolderMetadataList.indexOfFirst { it.id == target.id }
+                if (targetIndex >= 0) {
+                    favoriteFolderMetadataList[targetIndex] = favoriteFolderMetadataList[targetIndex]
+                        .copy(mediaCount = target.mediaCount)
+                }
+                val knownCounts = mapOf(
+                    source.id to (currentFavoriteFolderMetadata?.mediaCount ?: source.mediaCount),
+                    target.id to target.mediaCount
+                )
                 clearSelection()
                 (if (mode == FavoriteTransferMode.Copy) "已复制到目标收藏夹" else "已移动到目标收藏夹").toast(context)
-                // Reload server counts and restart offset pagination after a move.
+                // Refresh folder metadata and restart offset pagination after a move.
                 operating = false
-                updateFoldersInfo(source.id)
+                updateFoldersInfo(source.id, knownCounts)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -149,7 +160,10 @@ class FavoriteViewModel(
         }
     }
 
-    fun updateFoldersInfo(selectedFolderId: Long? = currentFavoriteFolderMetadata?.id) {
+    fun updateFoldersInfo(
+        selectedFolderId: Long? = currentFavoriteFolderMetadata?.id,
+        knownCounts: Map<Long, Int> = emptyMap()
+    ) {
         if (updatingFolders) return
         updatingFolders = true
         logger.fInfo { "Updating favorite folders" }
@@ -159,7 +173,10 @@ class FavoriteViewModel(
                     favoriteRepository.getAllFavoriteFolderMetadataList(
                         mid = Prefs.uid,
                         preferApiType = Prefs.apiType
-                    )
+                    ).map { folder ->
+                        // Preserve successful transfer counts while server metadata catches up.
+                        knownCounts[folder.id]?.let { folder.copy(mediaCount = it) } ?: folder
+                    }
                 withContext(Dispatchers.Main) {
                     this@FavoriteViewModel.favoriteFolderMetadataList
                         .swapList(favoriteFolderMetadataList)

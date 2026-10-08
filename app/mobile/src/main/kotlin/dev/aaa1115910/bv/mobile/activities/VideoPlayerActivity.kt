@@ -797,6 +797,7 @@ class VideoPlayerActivity : ComponentActivity() {
                     resolveUgcPlaybackTarget(
                         aid = aid,
                         cid = cid,
+                        resumeHistory = launchArgs.resumeHistory,
                         settings = settings
                     )
                 } else if (fromSeason) {
@@ -812,6 +813,7 @@ class VideoPlayerActivity : ComponentActivity() {
                     resolveUgcPlaybackTarget(
                         aid = aid,
                         cid = cid,
+                        resumeHistory = launchArgs.resumeHistory,
                         settings = settings
                     )
                 }
@@ -857,6 +859,7 @@ class VideoPlayerActivity : ComponentActivity() {
     private suspend fun resolveUgcPlaybackTarget(
         aid: Long,
         cid: Long,
+        resumeHistory: Boolean,
         settings: dev.aaa1115910.bv.settings.PlayerSettingsSource
     ): InitialVodPlaybackTarget {
         val detail = videoDetailViewModel.videoDetail
@@ -865,7 +868,11 @@ class VideoPlayerActivity : ComponentActivity() {
         val historyCid = detail.history.lastPlayedCid.takeIf { historyCid ->
             historyCid != 0L && detail.pages.any { it.cid == historyCid }
         }
-        val targetCid = historyCid ?: cid.takeIf { it != 0L } ?: detail.cid
+        val targetCid = if (resumeHistory) {
+            historyCid ?: cid.takeIf { it != 0L } ?: detail.cid
+        } else {
+            cid.takeIf { it != 0L } ?: detail.cid
+        }
         val targetPage = detail.pages.firstOrNull { it.cid == targetCid }
             ?: detail.pages.firstOrNull()
 
@@ -876,6 +883,7 @@ class VideoPlayerActivity : ComponentActivity() {
             aid = detail.aid,
             cid = targetPage?.cid ?: targetCid,
             playedMs = if (
+                resumeHistory &&
                 settings.playerDefaultStartPosition == PlayerDefaultStartPosition.History &&
                 historyCid == targetPage?.cid
             ) {

@@ -244,12 +244,14 @@ fun MobileMainScreen(
     }
 
     LaunchedEffect(bottomNavItems, navSuiteType) {
-        val configurableNavItems = MobileBottomNavItem.defaultItems
+        val configurableNavItems = MobileBottomNavItem.entries
             .map(MobileMainScreenNav::fromBottomNavItem)
         if (navSuiteType == NavigationSuiteType.NavigationBar &&
             state.currentNavItem in configurableNavItems && state.currentNavItem !in bottomNavItems
         ) {
-            state.navigate(bottomNavItems.first())
+            val fallbackNavItem = bottomNavItems.firstOrNull { it != MobileMainScreenNav.Setting }
+                ?: MobileMainScreenNav.Home
+            state.navigate(fallbackNavItem)
         }
     }
 
@@ -294,8 +296,8 @@ fun MobileMainScreen(
         MobileMainScreenNav.Setting
     ).map { it.name }
     val horizontalNavOrder = (
-        MobileBottomNavItem.defaultItems.map(MobileMainScreenNav::fromBottomNavItem) +
-            listOf(MobileMainScreenNav.Search, MobileMainScreenNav.Setting)
+        MobileBottomNavItem.entries.map(MobileMainScreenNav::fromBottomNavItem) +
+            listOf(MobileMainScreenNav.Search)
         ).map { it.name }
 
     val compareNavIndex: (String?, String?) -> Boolean = { a, b ->
@@ -898,6 +900,7 @@ enum class MobileMainScreenNav(val displayName: String, val icon: ImageVector) {
             MobileBottomNavItem.History -> History
             MobileBottomNavItem.Favorite -> Favorite
             MobileBottomNavItem.Mine -> Mine
+            MobileBottomNavItem.Setting -> Setting
         }
     }
 }

@@ -137,10 +137,6 @@ fun UserSpaceScreen(
             userSpaceViewModel.dynamicLoading ||
             userSpaceViewModel.favoriteLoading ||
             userSpaceViewModel.bangumiLoading
-    val appBarOverHeader = listState.firstVisibleItemIndex == 0 &&
-            listState.firstVisibleItemScrollOffset < 120
-    val appBarContainerColor = if (appBarOverHeader) Color.Transparent else MaterialTheme.colorScheme.surface
-    val appBarContentColor = if (appBarOverHeader) Color.White else MaterialTheme.colorScheme.onSurface
 
     LaunchedEffect(Unit) {
         val intent = (context as Activity).intent
@@ -194,17 +190,18 @@ fun UserSpaceScreen(
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = appBarContainerColor,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
-                    navigationIconContentColor = appBarContentColor,
-                    actionIconContentColor = appBarContentColor
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f),
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f),
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         }
-    ) {
+    ) { innerPadding ->
         PullToRefreshBox(
             modifier = Modifier
-                .fillMaxSize(),
+                .fillMaxSize()
+                .padding(innerPadding),
             state = refreshState,
             isRefreshing = refreshing,
             onRefresh = userSpaceViewModel::refresh
@@ -274,7 +271,7 @@ fun UserSpaceScreen(
                         edgePadding = 0.dp,
                         minTabWidth = 0.dp,
                         divider = {},
-                        containerColor = MaterialTheme.colorScheme.surface
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f)
                     ) {
                         tabs.forEachIndexed { index, tab ->
                             Tab(
@@ -310,13 +307,12 @@ fun UserSpaceScreen(
                         viewModel = userSpaceViewModel,
                         onClickVideo = { openSpaceVideo(context, it) },
                         onLoadPrevious = {
-                            val oldIndex = listState.firstVisibleItemIndex
-                            val oldOffset = listState.firstVisibleItemScrollOffset
-                            val controls = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "video-controls" }
-                            val anchorIndex = controls?.let { it.index + 1 } ?: oldIndex
+                            val anchor = listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                                (it.key as? String)?.startsWith("video:") == true
+                            }
                             userSpaceViewModel.loadPreviousVideos { added ->
-                                if (added > 0) scope.launch {
-                                    listState.scrollToItem(anchorIndex + added, if (controls == null) oldOffset else 0)
+                                if (added > 0 && anchor != null) scope.launch {
+                                    listState.scrollToItem(anchor.index + added, -anchor.offset)
                                 }
                             }
                         }
