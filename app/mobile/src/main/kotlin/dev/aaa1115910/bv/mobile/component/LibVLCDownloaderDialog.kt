@@ -40,14 +40,15 @@ fun LibVLCDownloaderDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var processing by remember { mutableStateOf(false) }
-    val upgradingStable = remember(version) {
-        version == VlcNativeLibs.defaultVersion &&
-            VlcLibsInstaller.getInstalledVersion(context) == VlcNativeLibs.previousStableVersion
+    val installedVersion = remember(version) {
+        VlcLibsInstaller.getInstalledVersion(context)
     }
+    val upgradingStable = version == VlcNativeLibs.defaultVersion &&
+        VlcNativeLibs.isPreviousStableVersion(installedVersion)
     var text by remember(version) {
         mutableStateOf(
             if (upgradingStable) {
-                "当前已安装 LibVLC ${VlcNativeLibs.previousStableVersion}，可升级到 $version。\n\n" +
+                "当前已安装 LibVLC $installedVersion，可升级到 $version。\n\n" +
                     "下载约 90 MB，建议在 Wi-Fi 环境下升级。下载完成后切换到新版；" +
                     "若已加载旧版组件，需要重启应用。\n\n选择“稍后”可继续使用当前版本，也可在播放器设置中升级。"
             } else {

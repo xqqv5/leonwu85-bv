@@ -12,7 +12,7 @@ class VlcNativeCompatibilityTest {
 
     @Test
     fun stableAndLegacyVlc3RemainAvailableOnArm32() {
-        for (version in listOf("3.7.5", "3.6.5", "3.x", null)) {
+        for (version in listOf("3.7.7", "3.7.6", "3.7.5", "3.6.5", "3.x", null)) {
             assertNull(VlcNativeCompatibility.unsupportedReason(version, "armeabi-v7a"))
         }
     }

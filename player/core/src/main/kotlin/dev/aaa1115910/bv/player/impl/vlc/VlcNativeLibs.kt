@@ -35,11 +35,14 @@ object VlcNativeLibs {
     val vlc4Version: String
         get() = BuildConfig.libVLC4Version
 
-    /** Already-installed VLC 3 build that remains usable until the user accepts the upgrade. */
-    const val previousStableVersion = "3.7.5"
+    /** Already-installed VLC 3 builds that remain usable until the user accepts the upgrade. */
+    private val previousStableVersions = setOf("3.7.5", "3.7.6")
+
+    fun isPreviousStableVersion(version: String?): Boolean =
+        version != null && version in previousStableVersions
 
     /**
-     * Versions offered for download. The previous stable build is accepted only for existing installs.
+     * Versions offered for download. Previous stable builds are accepted only for existing installs.
      */
     val supportedVersions: List<String>
         get() = listOf(defaultVersion, vlc4Version)
@@ -47,14 +50,14 @@ object VlcNativeLibs {
     fun isSupportedVersion(version: String?): Boolean = version != null && version in supportedVersions
 
     internal fun isLoadableVersion(version: String?): Boolean =
-        version == null || version == previousStableVersion || isSupportedVersion(version)
+        version == null || isPreviousStableVersion(version) || isSupportedVersion(version)
 
     fun shouldOfferStableUpgrade(
         installedVersion: String?,
         selectedVersion: String,
         usingVlc: Boolean,
-    ): Boolean = usingVlc && installedVersion == previousStableVersion &&
-        (selectedVersion == defaultVersion || selectedVersion == previousStableVersion)
+    ): Boolean = usingVlc && isPreviousStableVersion(installedVersion) &&
+        (selectedVersion == defaultVersion || isPreviousStableVersion(selectedVersion))
 
     /** SHA-256 of the `libvlc-all` AAR for a supported [version], or null for unknown versions. */
     fun aarSha256(version: String): String? = when (version) {
@@ -113,7 +116,7 @@ object VlcNativeLibs {
     /**
      * Whether the installed libraries can be used by this build. A missing version file is
      * accepted (legacy 3.6.x installs only recorded the version in preferences and share the VLC 3
-     * JNI surface). The previous stable build is also accepted while its upgrade is pending.
+     * JNI surface). Previous stable builds are also accepted while their upgrades are pending.
      */
     fun isInstalledVersionUsable(context: Context): Boolean {
         val libsDir = libsDir(context)

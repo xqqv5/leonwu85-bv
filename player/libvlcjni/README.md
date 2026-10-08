@@ -17,7 +17,7 @@ libvlc-android 的 Java 层（`org.videolan.libvlc.*`），源码入库，LGPL-2
 | `Media.nativeGetTracks` | 无参 | `(int type)` |
 | `nativeRecord` | `(String)` | `(String, boolean)` |
 
-应用要让用户在运行时选择下载 3.7.6 还是 4.0.0-eap29，所以这里维护一份**双版本超集** Java 层：
+应用要让用户在运行时选择下载 3.7.7 还是 4.0.0-eap29，所以这里维护一份**双版本超集** Java 层：
 两个版本的 `JNI_OnLoad` 需要的类、方法、字段都存在；行为差异按 `LibVLC.isVlc3()`（`majorVersion()`
 是两版都导出的 native）在运行时切换。原生方法通过导出符号懒绑定，不用 `RegisterNatives`，因此声明一个
 另一版本不存在的 native 是安全的，只要不去调用它。
@@ -27,10 +27,10 @@ libvlc-android 的 Java 层（`org.videolan.libvlc.*`），源码入库，LGPL-2
 - 基线：`https://code.videolan.org/videolan/libvlcjni` master @ `a8d53a91`（"Bump vlc 4 version"，
   对应 Maven `libvlc-all:4.0.0-eap29`），`libvlc/src/main/java` 与 `libvlc/src/main/res`。
 - VLC 3 兼容部分来自 `libvlcjni-3.x` @ `cfe024f6`（对应 `libvlc-all:3.7.5`）。
-- 当前 VLC 3 原生组件为 `libvlc-all:3.7.6`（AAR 标记的 libvlcjni revision 为 `c0cc8ce`）。
-  与 3.7.5 相比，Maven sources JAR 中的 Java 源码相同，四种 ABI 的 `Java_*` 导出符号和 JNI
-  查找签名未变，无需修改本地 Java 兼容层。
-- 已安装的 3.7.5 仍允许加载，便于用户暂缓升级；新下载仅提供 3.7.6 与 VLC 4 预览版。
+- 当前 VLC 3 原生组件为 `libvlc-all:3.7.7`（AAR 标记的 libvlcjni revision 为 `0b8dc65`）。
+  与 3.7.6 相比，四种 ABI 均新增 `LibVLC.nativeBuildFontCache()Z`，其余 `Java_*` 导出符号和
+  JNI 查找签名未变；Maven sources JAR 仅 `LibVLC.java` 新增字体缓存 API，已合并到本地兼容层。
+- 已安装的 3.7.5 / 3.7.6 仍允许加载，便于用户暂缓升级；新下载仅提供 3.7.7 与 VLC 4 预览版。
 - 不包含 AAR 里的 `assets/lua`、`assets/hrtfs`（播放列表脚本与 HRTF，本应用用不到）。
 
 ## 相对上游的改动
@@ -38,6 +38,7 @@ libvlc-android 的 Java 层（`org.videolan.libvlc.*`），源码入库，LGPL-2
 - `LibVLC`：`loadLibraries()` 不再 `System.exit(1)`，缺库时抛 `UnsatisfiedLinkError`；新增
   `markLibrariesLoaded()`（应用用 `System.load` 从下载目录加载后调用）、`isVlc3()`；VLC 3 下补上
   `--aout` / `--android-display-chroma RV16` 默认值（3.x 行为）。
+  `buildFontCache()` 合并自 3.7.7，调用需在后台线程；旧版或 VLC 4 预览版缺少该 native 时返回 false。
 - `Media`：补回 3.x 签名的 `createXxxTrackFromNative` / `createStatsFromNative` 重载（3.x 的 int id 以
   VLC 4 风格 `"audio/3"` 暴露）；`getTracks(type)` 在 VLC 3 下从全部轨道过滤；补回 `getTrackCount()` /
   `getTrack(idx)` / `getState()`；`Parse` 常量使用 VLC 4 位布局，VLC 3 下转换；`setHWDecoderEnabled`

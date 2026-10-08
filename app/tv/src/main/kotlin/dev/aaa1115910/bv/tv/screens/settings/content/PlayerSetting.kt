@@ -252,7 +252,7 @@ fun PlayerSetting(
                     }
                 )
             }
-            if (installedVlcVersion == VlcNativeLibs.previousStableVersion) {
+            if (VlcNativeLibs.isPreviousStableVersion(installedVlcVersion)) {
                 item {
                     SettingListItem(
                         title = "升级 LibVLC 到 ${VlcNativeLibs.defaultVersion}",

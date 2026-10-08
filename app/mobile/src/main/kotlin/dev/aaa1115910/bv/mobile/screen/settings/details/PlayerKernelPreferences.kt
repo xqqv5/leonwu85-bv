@@ -145,7 +145,7 @@ fun PreferenceGroupScope.playerKernelPreferences(
         values = PlayerType.entries.associate { it.ordinal to it.name },
         onValueChange = { ordinal -> state.onPlayerTypeSelected(context, PlayerType.entries[ordinal]) }
     )
-    if (state.installedVlcVersion == VlcNativeLibs.previousStableVersion) {
+    if (VlcNativeLibs.isPreviousStableVersion(state.installedVlcVersion)) {
         listItemPreference(
             title = "升级 LibVLC 到 ${VlcNativeLibs.defaultVersion}",
             summary = "已安装 ${state.installedVlcVersion}，点击下载并切换到新版",
