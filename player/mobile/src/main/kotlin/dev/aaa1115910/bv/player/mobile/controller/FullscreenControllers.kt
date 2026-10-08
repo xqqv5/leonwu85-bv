@@ -177,6 +177,7 @@ private fun TopControllers(
             ControllerButtonGroup(
                 modifier = Modifier.padding(start = 8.dp)
             ) {
+                HighEnergyProgressToggleButton()
                 if (dlnaAvailable) {
                     IconButton(
                         onClick = onCast,

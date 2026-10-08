@@ -8,8 +8,10 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
@@ -41,6 +43,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import dev.aaa1115910.biliapi.entity.video.VideoHighEnergy
 import dev.aaa1115910.bv.player.seekbar.SeekBar
 import dev.aaa1115910.bv.player.seekbar.SeekBarThumb
 import dev.aaa1115910.bv.player.seekbar.SeekMoveState
@@ -56,6 +59,7 @@ fun VideoSeekBar(
     bufferedPercentage: Int,
     playing: Boolean,
     colors: SliderColors = SliderDefaults.colors(),
+    highEnergy: VideoHighEnergy? = LocalVideoHighEnergyState.current.visibleData,
     thumb: (@Composable (Modifier, SeekMoveState?) -> Unit)? = null,
     onPositionChange: ((position: Long, pressing: Boolean) -> Unit)? = null
 ) {
@@ -116,18 +120,31 @@ fun VideoSeekBar(
         contentAlignment = Alignment.Center
     ) {
         sliderWidth = this.maxWidth
-        SeekBar(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            duration = duration,
-            position = if (pressing) previewPosition else position,
-            bufferedPercentage = bufferedPercentage,
-            colors = colors
-        )
-        Box(modifier = Modifier.fillMaxWidth()) {
-            val thumbModifier = Modifier
-                .onSizeChanged { thumbSize = it.width }
-                .offset { IntOffset(thumbOffsetX.toInt(), 0) }
-            thumb?.invoke(thumbModifier, seekMoveState)
+        Column {
+            if (highEnergy != null && duration > 0L) {
+                HighEnergyProgressBar(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    data = highEnergy,
+                    durationMs = duration,
+                    color = colors.activeTrackColor,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+            }
+            Box(contentAlignment = Alignment.Center) {
+                SeekBar(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    duration = duration,
+                    position = if (pressing) previewPosition else position,
+                    bufferedPercentage = bufferedPercentage,
+                    colors = colors
+                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    val thumbModifier = Modifier
+                        .onSizeChanged { thumbSize = it.width }
+                        .offset { IntOffset(thumbOffsetX.toInt(), 0) }
+                    thumb?.invoke(thumbModifier, seekMoveState)
+                }
+            }
         }
     }
 }

@@ -15,10 +15,13 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -79,12 +82,15 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerConfigData
 import dev.aaa1115910.bv.player.entity.VideoPlayerSeekData
 import dev.aaa1115910.bv.player.entity.VideoPlayerStateData
 import dev.aaa1115910.biliapi.entity.sponsorblock.SponsorSegment
+import dev.aaa1115910.bv.player.mobile.HighEnergyProgressBar
+import dev.aaa1115910.bv.player.mobile.LocalVideoHighEnergyState
 import dev.aaa1115910.bv.player.mobile.MaterialDarkTheme
 import dev.aaa1115910.bv.player.mobile.controller.menu.DanmakuMenu
 import dev.aaa1115910.bv.player.mobile.controller.menu.DashMenu
 import dev.aaa1115910.bv.player.mobile.controller.menu.MoreMenu
 import dev.aaa1115910.bv.player.mobile.controller.menu.SpeedMenu
 import dev.aaa1115910.bv.player.mobile.controller.menu.VideoListMenu
+import dev.aaa1115910.bv.player.seekbar.SeekBar
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
@@ -591,22 +597,42 @@ fun BvPlayerControllerVideoContent(
             )
         }
 
-        if (!showManualStartOverlay && !videoPlayerConfigData.isLive && videoPlayerConfigData.viewPoints.isNotEmpty()) {
+        if (!showManualStartOverlay && !videoPlayerConfigData.isLive) {
+            val highEnergyState = LocalVideoHighEnergyState.current
             val viewPointBottomPadding = when {
                 showBaseUi && isFullScreen -> 104.dp
                 showBaseUi -> 48.dp
                 else -> 0.dp
             }
-            ViewPointSegmentBar(
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .padding(bottom = viewPointBottomPadding),
-                viewPoints = videoPlayerConfigData.viewPoints,
-                durationMs = videoPlayerSeekData.duration,
-                currentPositionMs = videoPlayerSeekData.position,
-                onSeekToPosition = onSeekToPosition
-            )
+                    .padding(bottom = viewPointBottomPadding)
+            ) {
+                if (!showBaseUi && highEnergyState.data != null && videoPlayerSeekData.duration > 0L) {
+                    highEnergyState.visibleData?.let { highEnergy ->
+                        HighEnergyProgressBar(
+                            data = highEnergy,
+                            durationMs = videoPlayerSeekData.duration,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
+                    SeekBar(
+                        duration = videoPlayerSeekData.duration,
+                        position = videoPlayerSeekData.position,
+                        bufferedPercentage = videoPlayerSeekData.bufferedPercentage,
+                        height = 2.dp,
+                    )
+                }
+                ViewPointSegmentBar(
+                    viewPoints = videoPlayerConfigData.viewPoints,
+                    durationMs = videoPlayerSeekData.duration,
+                    currentPositionMs = videoPlayerSeekData.position,
+                    onSeekToPosition = onSeekToPosition
+                )
+            }
         }
 
         if (!showManualStartOverlay && !isMenuOpen && !showBaseUi) {

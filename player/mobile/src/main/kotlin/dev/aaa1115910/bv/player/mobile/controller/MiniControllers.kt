@@ -114,6 +114,7 @@ private fun TopControllers(
                 overflow = TextOverflow.Ellipsis,
                 color = Color.White
             )
+            HighEnergyProgressToggleButton()
             if (dlnaAvailable) {
                 IconButton(onClick = onCast) {
                     Icon(

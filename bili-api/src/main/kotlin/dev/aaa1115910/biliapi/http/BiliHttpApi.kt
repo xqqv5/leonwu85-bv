@@ -7,6 +7,7 @@ import dev.aaa1115910.biliapi.entity.message.MessageFeedType
 import dev.aaa1115910.biliapi.http.BiliHttpApi.getRegionDynamic
 import dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_APP
 import dev.aaa1115910.biliapi.BiliApiConstants.USER_AGENT_WEB
+import dev.aaa1115910.biliapi.entity.video.VideoHighEnergy
 import dev.aaa1115910.biliapi.http.entity.BiliResponse
 import dev.aaa1115910.biliapi.http.entity.BiliResponseWithoutData
 import dev.aaa1115910.biliapi.http.entity.VVoucherException
@@ -3413,6 +3414,23 @@ object BiliHttpApi {
         cid?.let { parameter("cid", it) }
         parameter("index", if (needJsonArrayIndex) 1 else 0)
     }.body()
+
+    suspend fun getVideoHighEnergy(
+        aid: Long,
+        bvid: String,
+        cid: Long,
+    ): VideoHighEnergy? {
+        require(aid > 0L && cid > 0L) { "aid and cid must be positive" }
+        val response = client.get("https://bvc.bilivideo.com/pbp/data") {
+            parameter("aid", aid)
+            parameter("bvid", bvid)
+            parameter("cid", cid)
+            parameter("r", "loader")
+            header("Origin", "https://www.bilibili.com")
+            header("Referer", "https://www.bilibili.com/video/$bvid")
+        }
+        return VideoHighEnergy.fromJson(json.parseToJsonElement(response.bodyAsText()))
+    }
 
     suspend fun getAppVideoShot(
         aid: Long,

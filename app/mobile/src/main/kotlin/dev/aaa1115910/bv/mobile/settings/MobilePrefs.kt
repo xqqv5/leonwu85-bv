@@ -400,6 +400,13 @@ object MobilePrefs {
         get() = read(MobilePrefKeys.showDanmakuRequest)
         set(value) = write(MobilePrefKeys.showDanmakuKey, value)
 
+    var showHighEnergyProgress: Boolean
+        get() = read(MobilePrefKeys.showHighEnergyProgressRequest)
+        set(value) = write(MobilePrefKeys.showHighEnergyProgressKey, value)
+
+    val showHighEnergyProgressFlow: Flow<Boolean>
+        get() = dsm.getPreferenceFlow(MobilePrefKeys.showHighEnergyProgressRequest)
+
     var enableSponsorBlock: Boolean
         get() = read(MobilePrefKeys.enableSponsorBlockRequest)
         set(value) = write(MobilePrefKeys.enableSponsorBlockKey, value)
@@ -596,6 +603,7 @@ object MobilePrefKeys {
     val defaultLiveCodecKey = intPreferencesKey("mobile_default_live_codec")
     val isLoopKey = booleanPreferencesKey("mobile_player_is_loop")
     val showDanmakuKey = booleanPreferencesKey("mobile_player_show_danmaku")
+    val showHighEnergyProgressKey = booleanPreferencesKey("mobile_player_show_high_energy_progress")
     val enableSponsorBlockKey = booleanPreferencesKey("mobile_enable_sponsor_block")
     val sponsorBlockSkipModeKey = intPreferencesKey("mobile_sponsor_block_skip_mode")
     val sponsorBlockApiServerKey = stringPreferencesKey("mobile_sponsor_block_api_server")
@@ -690,6 +698,7 @@ object MobilePrefKeys {
     val defaultLiveCodecRequest = PreferenceRequest(defaultLiveCodecKey, LiveCodec.HLS.ordinal)
     val isLoopRequest = PreferenceRequest(isLoopKey, false)
     val showDanmakuRequest = PreferenceRequest(showDanmakuKey, true)
+    val showHighEnergyProgressRequest = PreferenceRequest(showHighEnergyProgressKey, true)
     val enableSponsorBlockRequest = PreferenceRequest(enableSponsorBlockKey, false)
     val sponsorBlockSkipModeRequest = PreferenceRequest(sponsorBlockSkipModeKey, SponsorBlockSkipMode.Auto.value)
     val sponsorBlockApiServerRequest = PreferenceRequest(sponsorBlockApiServerKey, "bsbsb.top")

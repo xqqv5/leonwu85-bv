@@ -17,6 +17,7 @@ import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskSegment
 import dev.aaa1115910.biliapi.entity.danmaku.DanmakuMaskType
 import dev.aaa1115910.biliapi.entity.video.HeartbeatVideoType
 import dev.aaa1115910.biliapi.entity.video.Subtitle
+import dev.aaa1115910.biliapi.entity.video.VideoHighEnergy
 import dev.aaa1115910.biliapi.entity.video.VideoShot
 import dev.aaa1115910.biliapi.grpc.utils.handleGrpcException
 import dev.aaa1115910.biliapi.http.BiliHttpApi
@@ -26,6 +27,7 @@ import dev.aaa1115910.biliapi.http.entity.BiliAuthFailureHandler
 import dev.aaa1115910.biliapi.http.entity.danmaku.DanmakuData
 import dev.aaa1115910.biliapi.http.entity.video.PlayUrlData
 import dev.aaa1115910.biliapi.http.entity.video.VideoPlayerInfo
+import dev.aaa1115910.biliapi.util.AvBvConverter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -670,6 +672,11 @@ class VideoPlayRepository(
         }
         return DanmakuMask.fromBinary(maskBinary, danmakuMaskType).segments
     }
+
+    suspend fun getVideoHighEnergy(aid: Long, cid: Long): VideoHighEnergy? =
+        withContext(Dispatchers.IO) {
+            BiliHttpApi.getVideoHighEnergy(aid = aid, bvid = AvBvConverter.av2bv(aid), cid = cid)
+        }
 
     suspend fun getVideoShot(
         aid: Long,

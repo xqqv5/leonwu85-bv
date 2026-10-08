@@ -211,6 +211,7 @@ import dev.aaa1115910.bv.mobile.component.emote.EmoteTextEditor
 import dev.aaa1115910.bv.mobile.component.emote.emoteDisplayName
 import dev.aaa1115910.bv.mobile.component.player.VodBufferRecoveryDialog
 import dev.aaa1115910.bv.mobile.component.player.VideoPlayerPages
+import dev.aaa1115910.bv.mobile.component.player.rememberHighEnergyProgressData
 import dev.aaa1115910.bv.mobile.component.reply.CommentItem
 import dev.aaa1115910.bv.mobile.component.reply.CommentVoteCard
 import dev.aaa1115910.bv.mobile.component.reply.ReplySheetScaffold
@@ -250,7 +251,10 @@ import dev.aaa1115910.bv.player.entity.VideoPlayerSeekThumbData
 import dev.aaa1115910.bv.player.entity.VideoPlayerVideoInfoData
 import dev.aaa1115910.bv.player.entity.VideoPlayerVideoShotData
 import dev.aaa1115910.bv.player.mobile.BvPlayer
+import dev.aaa1115910.bv.player.mobile.LocalVideoHighEnergyState
+import dev.aaa1115910.bv.player.mobile.VideoHighEnergyState
 import dev.aaa1115910.bv.player.entity.Resolution
+import dev.aaa1115910.bv.player.entity.RequestState
 import dev.aaa1115910.bv.settings.PlayerSettingsProvider
 import dev.aaa1115910.bv.util.Prefs
 import dev.aaa1115910.bv.util.fInfo
@@ -336,6 +340,20 @@ fun VideoPlayerScreen(
     val playerSettings = PlayerSettingsProvider.current
     val useDarkSystemBarIcons = MaterialTheme.colorScheme.surface.luminance() > 0.5f
     val useLightSystemBarIcons = playerViewModel.isLive || !useDarkSystemBarIcons
+
+    val initialShowHighEnergyProgress = remember { MobilePrefs.showHighEnergyProgress }
+    val showHighEnergyProgress by MobilePrefs.showHighEnergyProgressFlow.collectAsState(
+        initial = initialShowHighEnergyProgress
+    )
+    var highEnergyProgressVisible by rememberSaveable { mutableStateOf(true) }
+    val highEnergyProgress = rememberHighEnergyProgressData(
+        aid = playerViewModel.currentAid,
+        cid = playerViewModel.currentCid,
+        enabled = showHighEnergyProgress,
+        onlineVideoReady = !playerViewModel.isLive &&
+            !playerViewModel.currentPlaybackOffline &&
+            playerViewModel.loadState == RequestState.Success,
+    )
 
     var isVideoFullscreen by rememberSaveable { mutableStateOf(false) }
     var autoRotateSuppressed by remember { mutableStateOf(false) }
@@ -878,6 +896,11 @@ fun VideoPlayerScreen(
             ) {
                 if (playerViewModel.videoPlayer != null) {
                     CompositionLocalProvider(
+                        LocalVideoHighEnergyState provides VideoHighEnergyState(
+                            data = highEnergyProgress,
+                            visible = highEnergyProgressVisible,
+                            onVisibilityChange = { highEnergyProgressVisible = it },
+                        ),
                         LocalVideoPlayerSeekThumbData provides VideoPlayerSeekThumbData(
                             idleIcon = playerViewModel.playerIconIdle,
                             movingIcon = playerViewModel.playerIconMoving

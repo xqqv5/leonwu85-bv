@@ -44,6 +44,12 @@ fun PlayContent(
                 )
             },
             "播放" to {
+                switchPreference(
+                    title = "高能进度条",
+                    summary = "在进度条上方显示弹幕热度趋势",
+                    prefReq = MobilePrefKeys.showHighEnergyProgressRequest,
+                    onCheckedChange = { true }
+                )
                 radioPreference(
                     title = "默认倍速",
                     prefReq = MobilePrefKeys.currentPlaySpeedRequest,
