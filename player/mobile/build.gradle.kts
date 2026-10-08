@@ -80,3 +80,7 @@ dependencies {
     debugImplementation(androidx.compose.ui.tooling)
     testImplementation(libs.kotlin.test)
 }
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+}

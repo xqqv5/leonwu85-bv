@@ -24,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.keepScreenOn
 import com.kuaishou.akdanmaku.DanmakuConfig
 import com.kuaishou.akdanmaku.data.DanmakuItemData
 import com.kuaishou.akdanmaku.ecs.component.filter.TypeFilter
@@ -599,6 +600,7 @@ fun BvPlayer(
         override fun onIdle() {
             logger.info { "onIdle" }
             mDanmakuPlayer?.pause()
+            isPlaying = false
         }
 
         override fun onSeekBack(seekBackIncrementMs: Long) {
@@ -772,7 +774,9 @@ fun BvPlayer(
         ),
     ) {
         BvPlayerController(
-            modifier = modifier,
+            modifier = modifier.then(
+                if (isPlaying && !isError) Modifier.keepScreenOn() else Modifier
+            ),
             isFullScreen = isFullScreen,
             controlsEnabled = controlsEnabled,
             onEnterFullScreen = onEnterFullScreen,
